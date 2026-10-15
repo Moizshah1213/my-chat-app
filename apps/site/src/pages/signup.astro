@@ -1,0 +1,30 @@
+---
+// Signup page – form posts to /api/auth/signup on the API
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up — LiveChat</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 4rem auto; padding: 0 1rem; }
+    input { display:block; width:100%; margin:0.5rem 0; padding:0.5rem; }
+    button { padding:0.6rem 1rem; }
+    .btn.primary { background:#4f46e5; color:#fff; }
+  </style>
+</head>
+<body>
+  <main>
+    <h2>Create your account</h2>
+    <form method="post" action="/api/auth/signup">
+      <input type="email" name="email" placeholder="Email" required />
+      <input type="text" name="workspace" placeholder="Workspace name" required />
+      <input type="password" name="password" placeholder="Password" required />
+      <button type="submit" class="btn primary">Create account</button>
+    </form>
+    <p><a href="/login">Already have an account? Log in</a></p>
+  </main>
+</body>
+</html>

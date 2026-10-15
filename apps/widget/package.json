@@ -1,0 +1,20 @@
+{
+  "name": "@livechat/widget",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Embeddable live-chat widget (Shadow DOM, Socket.IO, zero framework deps).",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2"
+  }
+}

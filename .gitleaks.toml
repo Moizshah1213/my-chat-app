@@ -1,0 +1,23 @@
+# gitleaks configuration — secret scanning (runs in CI and as pre-commit).
+title = "livechat gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-private-key"
+description = "Private key material"
+regex = '''-----BEGIN (RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----'''
+
+[allowlist]
+description = "Ignore obvious placeholders and the env example"
+paths = [
+  '''\.env\.example$''',
+  '''(^|/)node_modules/''',
+]
+regexes = [
+  '''change-me''',
+  '''000000000000''',
+  '''pk_live_xxx''',
+  '''example\.com''',
+]

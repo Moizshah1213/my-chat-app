@@ -1,0 +1,39 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build
+dist/
+build/
+.next/
+.astro/
+.output/
+.turbo/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# logs
+*.log
+npm-debug*
+pnpm-debug*
+
+# test / coverage
+coverage/
+.nyc_output/
+test-results/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# drizzle / migrations scratch
+packages/db/migrations/meta/

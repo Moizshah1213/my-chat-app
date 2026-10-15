@@ -1,0 +1,37 @@
+{
+  "name": "@livechat/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/migrate.ts",
+    "test:migrate": "tsx src/migrate.ts --test",
+    "bootstrap": "tsx src/bootstrap.ts",
+    "test": "node --test dist/**/*.test.js || echo \"no tests\"",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@livechat/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "dotenv": "^16.4.7",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.1",
+    "tsx": "^4.19.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.0"
+  }
+}

@@ -76,19 +76,15 @@ export default function ApiKeysPage() {
   }
 
   return (
-    <>
-      <div className="topbar">
-        <h1>API Keys</h1>
-      </div>
-      <div className="content">
-        {error && <div className="alert error">{error}</div>}
+    <div className="page">
+      {error && <div className="alert error">{error}</div>}
         {newKey && (
           <div className="alert success">
             <strong>Key created — copy it now:</strong>
             <div className="mono" style={{ marginTop: 6, wordBreak: 'break-all' }}>
               {newKey}
             </div>
-            <button className="btn secondary small" style={{ marginTop: 8 }} onClick={() => setNewKey('')}>
+            <button className="btn s" style={{ marginTop: 8 }} onClick={() => setNewKey('')}>
               Dismiss
             </button>
           </div>
@@ -144,7 +140,7 @@ export default function ApiKeysPage() {
                   </td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     <button
-                      className="btn secondary small"
+                      className="btn s sm"
                       style={{ marginRight: 8 }}
                       disabled={verifying === k.id}
                       onClick={() => void onVerify(k)}
@@ -152,7 +148,7 @@ export default function ApiKeysPage() {
                       {verifying === k.id ? 'Checking…' : 'Verify'}
                     </button>
                     {!k.revokedAt && (
-                      <button className="btn danger small" onClick={() => void onRevoke(k.id)}>
+                      <button className="btn danger sm" onClick={() => void onRevoke(k.id)}>
                         Revoke
                       </button>
                     )}
@@ -184,10 +180,7 @@ export default function ApiKeysPage() {
         <div className="card">
           <h2>Embed snippet</h2>
           <p className="muted">Paste this on every page, just before &lt;/body&gt;:</p>
-          <pre
-            className="mono"
-            style={{ background: '#0f172a', color: '#e2e8f0', padding: 14, borderRadius: 8, overflowX: 'auto' }}
-          >
+          <pre className="code">
 {`<script src="${process.env.NEXT_PUBLIC_WIDGET_URL ?? 'https://cdn.example.com'}/widget.js"
         data-public-key="pk_…"
         data-api-url="${process.env.NEXT_PUBLIC_API_URL ?? 'https://api.example.com'}"
@@ -195,6 +188,5 @@ export default function ApiKeysPage() {
           </pre>
         </div>
       </div>
-    </>
   );
 }

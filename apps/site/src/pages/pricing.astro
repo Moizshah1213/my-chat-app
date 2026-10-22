@@ -1,8 +1,80 @@
 ﻿---
-import Layout from '../../../../../../../../../../../../layouts/Layout.astro';
+import Layout from '../layouts/Layout.astro';
+
+const TIERS = [
+  {
+    name: 'Free',
+    price: '$0',
+    features: ['1 agent seat', 'Unlimited conversations', 'Community support'],
+    cta: 'Start free',
+    featured: false,
+  },
+  {
+    name: 'Pro',
+    price: '$29',
+    features: ['Unlimited agents', 'Roles, invites, audit log', 'Priority email support'],
+    cta: 'Start free trial',
+    featured: true,
+  },
+  {
+    name: 'Business',
+    price: '$99',
+    features: ['SSO-ready workspaces', 'Custom data retention', 'Dedicated support'],
+    cta: 'Contact sales',
+    featured: false,
+  },
+];
 ---
 
-<Layout title="Pricing" description="Pricing plans for LiveChat">
-<h1>Pricing</h1>
-<p>Plans for every team size.</p>
+<Layout
+  title="Pricing — LiveChat"
+  description="Simple plans for every team size. Start free, upgrade when you need roles, audit logs, and priority support."
+>
+  <section class="page-head">
+    <h1>Simple pricing.</h1>
+    <p>Start free. Upgrade when your team grows — no per-message math.</p>
+  </section>
+  <section class="tiers">
+    {TIERS.map((t, i) => (
+      <article class:list={['tier', { featured: t.featured }]} style={`animation-delay: ${0.05 + i * 0.08}s`}>
+        <h2>{t.name}</h2>
+        <p class="price"><span>{t.price}</span><span class="per">/mo</span></p>
+        <ul>
+          {t.features.map((f) => <li>{f}</li>)}
+        </ul>
+        <a class={t.featured ? 'btn-primary' : 'btn-outline'} href="/signup">{t.cta}</a>
+      </article>
+    ))}
+  </section>
 </Layout>
+
+<style>
+  .page-head { max-width: var(--max-hero); margin: 72px auto 0; text-align: center; animation: fade-up 0.9s var(--ease) both; }
+  .page-head h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0; }
+  .page-head p { color: var(--muted); font-size: 17px; margin: 16px 0 0; }
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 56px; align-items: stretch; }
+  .tier {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    animation: fade-up 0.9s var(--ease) both;
+    transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+  .tier:hover { transform: translateY(-3px); border-color: var(--border-hover); }
+  .tier.featured { border-color: var(--accent); }
+  .tier h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .price { margin: 14px 0 0; }
+  .price span:first-child { font-size: 40px; font-weight: 600; letter-spacing: -0.02em; }
+  .per { color: var(--faint); font-family: var(--font-mono); font-size: 13px; }
+  .tier ul { list-style: none; padding: 0; margin: 20px 0 24px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .tier li { color: var(--muted); font-size: 14px; padding-left: 18px; position: relative; }
+  .tier li::before { content: ''; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .tier :global(.btn-primary), .tier :global(.btn-outline) { width: 100%; }
+  @media (max-width: 860px) {
+    .page-head h1 { font-size: 36px; }
+    .tiers { grid-template-columns: 1fr; }
+  }
+</style>

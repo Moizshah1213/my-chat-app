@@ -31,12 +31,8 @@ export default function ActivityPage() {
   }, [load]);
 
   return (
-    <>
-      <div className="topbar">
-        <h1>Activity</h1>
-      </div>
-      <div className="content">
-        {error && <div className="alert error">{error}</div>}
+    <div className="page">
+      {error && <div className="alert error">{error}</div>}
         <div className="card">
           <h2>Recent activity</h2>
           {loading && <div className="muted">Loading…</div>}
@@ -67,6 +63,5 @@ export default function ActivityPage() {
           )}
         </div>
       </div>
-    </>
   );
 }

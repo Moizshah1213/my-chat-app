@@ -37,14 +37,13 @@ export default function VisitorDetailPage() {
   const attrs = Object.entries(visitor?.meta ?? {});
 
   return (
-    <>
-      <div className="topbar" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Link href="/visitors" className="btn secondary small">
-          ← Visitors
-        </Link>
-        <h1>{visitor?.name ?? `Visitor ${visitorId.slice(0, 8)}`}</h1>
-      </div>
-      <div className="content">
+    <div className="page">
+      <div className="back-row">
+        <Link href="/visitors" className="btn s">
+            ← Visitors
+          </Link>
+          <span className="back-title">{visitor?.name ?? `Visitor ${visitorId.slice(0, 8)}`}</span>
+        </div>
         {error && <div className="alert error">{error}</div>}
         {visitor && (
           <>
@@ -122,6 +121,5 @@ export default function VisitorDetailPage() {
           </>
         )}
       </div>
-    </>
   );
 }

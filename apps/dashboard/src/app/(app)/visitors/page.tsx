@@ -16,6 +16,16 @@ function timeAgo(iso: string): string {
   return RELATIVE.format(-Math.round(hours / 24), 'day');
 }
 
+function initialsOf(label: string): string {
+  return label
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
 /** Visitors list (blueprint §12): who has chatted, with their attributes. */
 export default function VisitorsPage() {
   const [items, setItems] = useState<VisitorSummary[]>([]);
@@ -37,48 +47,46 @@ export default function VisitorsPage() {
   }, [load]);
 
   return (
-    <>
-      <div className="topbar">
-        <h1>Visitors</h1>
-      </div>
-      <div className="content">
-        {error && <div className="alert error">{error}</div>}
-        {loading && items.length === 0 && <div className="loading">Loading…</div>}
-        {!loading && items.length === 0 && !error && (
-          <div className="empty-state">No visitors yet — they appear after first widget chat.</div>
-        )}
-        {items.length > 0 && (
-          <div className="card">
-            <table className="list">
-              <thead>
-                <tr>
-                  <th>Visitor</th>
-                  <th>Email</th>
-                  <th>Attributes</th>
-                  <th>Last seen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((v) => {
-                  const attrCount = Object.keys(v.meta ?? {}).length;
-                  return (
-                    <tr key={v.id}>
-                      <td>
-                        <Link href={`/visitors/${v.id}`}>
-                          {v.name ?? `Visitor ${v.id.slice(0, 8)}`}
-                        </Link>
-                      </td>
-                      <td className="muted">{v.email ?? '—'}</td>
-                      <td className="muted">{attrCount > 0 ? `${attrCount} set` : '—'}</td>
-                      <td className="muted">{timeAgo(v.lastSeen)}</td>
-                    </tr>
-                  );
-                })}
+    <div className="page">
+      {error && <div className="alert error">{error}</div>}
+      {loading && items.length === 0 && <div className="empty-state">Loading…</div>}
+      {!loading && items.length === 0 && !error && (
+        <div className="empty-state">No visitors yet — they appear after first widget chat.</div>
+      )}
+      {items.length > 0 && (
+        <div className="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Visitor</th>
+                <th>Email</th>
+                <th>Attributes</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((v) => {
+                const attrCount = Object.keys(v.meta ?? {}).length;
+                return (
+                  <tr key={v.id}>
+                    <td>
+                      <Link href={`/visitors/${v.id}`} className="who-cell">
+                        <span className="av-s" aria-hidden="true">
+                          {initialsOf(v.name ?? v.email ?? 'V') || 'V'}
+                        </span>
+                        {v.name ?? `Visitor ${v.id.slice(0, 8)}`}
+                      </Link>
+                    </td>
+                    <td className="muted">{v.email ?? '—'}</td>
+                    <td className="muted">{attrCount > 0 ? `${attrCount} set` : '—'}</td>
+                    <td className="muted">{timeAgo(v.lastSeen)}</td>
+                  </tr>
+                );
+              })}
               </tbody>
             </table>
           </div>
         )}
-      </div>
-    </>
+    </div>
   );
 }

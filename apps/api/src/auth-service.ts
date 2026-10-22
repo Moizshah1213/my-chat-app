@@ -21,7 +21,7 @@ import {
   MIN_PASSWORD_LENGTH,
 } from '@livechat/shared';
 import { generateToken, generateUuid, hashToken, hashPassword, verifyPassword } from './crypto.js';
-import { signAccessToken } from './jwt.js';
+import { signAccessToken, signTempToken, verifyTempToken } from './jwt.js';
 import { generateTotpSecret, totpUri, verifyTotp, storeTotpSecret, loadTotpSecret } from './totp.js';
 
 const MAX_FAILED = 8;
@@ -216,7 +216,9 @@ export const authService = {
 
   /**
    * Login with brute-force protection (per-account lockout + failed counter).
-   * Returns { requires2fa: true } when 2FA is enabled and no code was supplied.
+   * Returns { requires2fa: true, tempToken } when 2FA is enabled and no code
+   * was supplied — the client posts tempToken + code to /v1/auth/2fa/verify
+   * (mobile two-step flow) OR simply retries login with `totpCode` (one-shot).
    */
   async login(input: {
     email: string;
@@ -224,7 +226,7 @@ export const authService = {
     totpCode?: string;
     ip?: string;
     userAgent?: string;
-  }): Promise<SessionResult | { requires2fa: true }> {
+  }): Promise<SessionResult | { requires2fa: true; tempToken: string }> {
     return withoutTenant(process.env.DATABASE_URL!, async () => {
       const tx = currentTx();
       const [user] = await tx.select().from(users).where(eq(users.email, input.email));
@@ -250,7 +252,9 @@ export const authService = {
         throw invalidCredentials();
       }
 
-      if (user.totpEnabled && !input.totpCode) return { requires2fa: true as const };
+      if (user.totpEnabled && !input.totpCode) {
+        return { requires2fa: true as const, tempToken: signTempToken(user.id) };
+      }
       if (user.totpEnabled && input.totpCode) {
         // TOTP code or a one-time recovery code (consumed on match).
         if (!(await verifySecondFactor(tx, user, input.totpCode))) {
@@ -264,6 +268,56 @@ export const authService = {
         .where(eq(users.id, user.id));
 
       // Allow reading this user's OWN memberships (RLS self policy) to find ws.
+      await setUserContext(user.id);
+      const [membership] = await tx
+        .select()
+        .from(memberships)
+        .where(eq(memberships.userId, user.id));
+      if (!membership) throw badRequest('User has no workspace');
+
+      return this.issueSession(user, membership.workspaceId, membership.role, {
+        ip: input.ip,
+        userAgent: input.userAgent,
+      });
+    });
+  },
+
+  /**
+   * Complete the two-step 2FA login: `tempToken` proves the password already
+   * checked out at /login (short-lived, audience-scoped to 2FA only), `code`
+   * is a TOTP or an unused recovery code. Issues a full session exactly like
+   * `login` — same lockout rules, same counters reset.
+   */
+  async completeTwoFactorLogin(input: {
+    tempToken: string;
+    code: string;
+    ip?: string;
+    userAgent?: string;
+  }): Promise<SessionResult> {
+    let sub: string;
+    try {
+      ({ sub } = verifyTempToken(input.tempToken));
+    } catch {
+      throw invalidCredentials('Invalid or expired 2FA token');
+    }
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const [user] = await tx.select().from(users).where(eq(users.id, sub));
+      // Deleted account, 2FA turned off in the meantime, or still locked
+      // (tempToken was minted before the password check — re-check gates here).
+      if (!user || !user.totpEnabled) throw invalidCredentials();
+      if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+        throw invalidCredentials('Account temporarily locked. Try again later.');
+      }
+      if (!(await verifySecondFactor(tx, user, input.code))) {
+        throw invalidCredentials('Invalid authentication code');
+      }
+
+      await tx
+        .update(users)
+        .set({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() })
+        .where(eq(users.id, user.id));
+
       await setUserContext(user.id);
       const [membership] = await tx
         .select()

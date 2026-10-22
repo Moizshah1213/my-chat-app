@@ -1,20 +1,21 @@
-/** Shadow-DOM styles — minimalist dark. `--lc-color` is the workspace brand
- *  accent (set from settings); everything else is a flat dark neutral. No
- *  gradients, borders over shadows. */
+/** Shadow-DOM styles — UI spec §A mirrored into the widget: same neutrals
+ *  (#08090a bg, #0d0e10 surface, #23252a border), one accent, no gradients.
+ *  `--lc-color` is the workspace brand accent (set from settings). */
 export const STYLES = `
 :host { all: initial; }
 .lc-root {
-  --lc-color: #4f46e5;
-  --lc-surface: #121217;
-  --lc-surface-2: #1a1a21;
-  --lc-border: #24242c;
-  --lc-border-strong: #2e2e38;
-  --lc-text: #eaeaef;
-  --lc-muted: #8a8a96;
+  --lc-color: #6e6af0;
+  --lc-surface: #0d0e10;
+  --lc-surface-2: #17181b;
+  --lc-border: #23252a;
+  --lc-border-strong: #3a3d45;
+  --lc-text: #edeef0;
+  --lc-muted: #8a8f98;
   position: fixed;
   bottom: 20px;
   z-index: 2147483000;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Geist', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: var(--lc-text);
@@ -65,7 +66,7 @@ export const STYLES = `
 .lc-header-status { font-size: 11px; opacity: 0.85; }
 .lc-close { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1; }
 
-.lc-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #0a0a0d; }
+.lc-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #08090a; }
 .lc-msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
 .lc-msg[data-sender='visitor'] { align-self: flex-end; background: var(--lc-color); color: #fff; border-bottom-right-radius: 4px; }
 .lc-msg[data-sender='agent'] { align-self: flex-start; background: var(--lc-surface-2); border: 1px solid var(--lc-border); border-bottom-left-radius: 4px; }

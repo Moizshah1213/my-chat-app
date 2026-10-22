@@ -1,0 +1,814 @@
+﻿
+=== [1] POST /v1/auth/signup — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "refreshToken": "ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+  "user": {
+    "id": "00000001-0000-4000-8000-000000000000",
+    "email": "owner.test@example.com",
+    "name": "Test Owner",
+    "emailVerifiedAt": null,
+    "totpEnabled": false
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== [2] POST /v1/auth/login (normal) — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "refreshToken": "ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+  "user": {
+    "id": "00000001-0000-4000-8000-000000000000",
+    "email": "owner.test@example.com",
+    "name": "Test Owner",
+    "emailVerifiedAt": null,
+    "totpEnabled": false
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== [3] POST /v1/auth/login — Set-Cookie (browser only) — 200 ===
+{
+  "setCookie": "refresh_token=ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw; Max-Age=2592000; Domain=localhost; Path=/v1/auth; Expires=Mon, 16 Nov 2026 13:13:39 GMT; HttpOnly; SameSite=Lax"
+}
+
+=== [4] POST /v1/auth/login (wrong password) — 401 ===
+{
+  "error": {
+    "code": "invalid_credentials",
+    "message": "Invalid email or password"
+  }
+}
+
+=== [5] POST /v1/auth/2fa/setup (Bearer) — 200 ===
+{
+  "secret": "FAKEBASE32SECRETFAKEBASE32SECRET",
+  "otpauthUrl": "otpauth://totp/LiveChat:owner.test%40example.com?secret=FAKEBASE32SECRET&issuer=LiveChat"
+}
+
+=== [6] POST /v1/auth/2fa/verify (enrollment confirm, Bearer only) — 200 ===
+{
+  "recoveryCodes": [
+    "aaaaa-bbbbb",
+    "ccccc-ddddd",
+    "eeeee-fffff",
+    "ggggg-hhhhh",
+    "iiiii-jjjjj",
+    "kkkkk-lllll",
+    "mmmmm-nnnnn",
+    "ooooo-ppppp",
+    "qqqqq-rrrrr",
+    "sssss-ttttt"
+  ]
+}
+
+=== [7] POST /v1/auth/login (2FA required) — 200 ===
+{
+  "requires2fa": true,
+  "tempToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_TEMP_CLAIMS.c2lnbmF0dXJlLWZha2U"
+}
+
+=== [8] POST /v1/auth/2fa/verify (TOTP + tempToken, NO bearer) — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "refreshToken": "ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+  "user": {
+    "id": "00000001-0000-4000-8000-000000000000",
+    "email": "owner.test@example.com",
+    "name": "Test Owner",
+    "emailVerifiedAt": null,
+    "totpEnabled": true
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== [9] POST /v1/auth/2fa/verify (BACKUP CODE + tempToken) — code consumed once — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "refreshToken": "ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+  "user": {
+    "id": "00000001-0000-4000-8000-000000000000",
+    "email": "owner.test@example.com",
+    "name": "Test Owner",
+    "emailVerifiedAt": null,
+    "totpEnabled": true
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== [10] POST /v1/auth/2fa/verify (wrong code) — 401 ===
+{
+  "error": {
+    "code": "invalid_credentials",
+    "message": "Invalid authentication code"
+  }
+}
+
+=== [11] POST /v1/auth/login (one-shot totpCode — alternative to 2-step) — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "refreshToken": "ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+  "user": {
+    "id": "00000001-0000-4000-8000-000000000000",
+    "email": "owner.test@example.com",
+    "name": "Test Owner",
+    "emailVerifiedAt": null,
+    "totpEnabled": true
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== [12] POST /v1/auth/login (second device session for logout demos) — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "refreshToken": "ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+  "user": {
+    "id": "00000001-0000-4000-8000-000000000000",
+    "email": "owner.test@example.com",
+    "name": "Test Owner",
+    "emailVerifiedAt": null,
+    "totpEnabled": true
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== [13] POST /widget/v1/visitor_init (creates conversation A) — 200 ===
+{
+  "visitorId": "00000003-0000-4000-8000-000000000000",
+  "conversationId": "00000004-0000-4000-8000-000000000000",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "expiresAt": "2026-10-18T13:13:40.961Z",
+  "messages": []
+}
+
+=== [14] POST /widget/v1/visitor_init (creates conversation B) — 200 ===
+{
+  "visitorId": "00000005-0000-4000-8000-000000000000",
+  "conversationId": "00000006-0000-4000-8000-000000000000",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "expiresAt": "2026-10-18T13:13:41.008Z",
+  "messages": []
+}
+
+=== [15] GET /v1/conversations?limit=1 (page 1) — 200 ===
+{
+  "items": [
+    {
+      "id": "00000006-0000-4000-8000-000000000000",
+      "status": "open",
+      "assignedTo": null,
+      "subject": null,
+      "closedAt": null,
+      "lastMessageAt": "2026-10-17T13:13:40.979Z",
+      "createdAt": "2026-10-17T13:13:40.979Z",
+      "visitor": {
+        "id": "00000005-0000-4000-8000-000000000000",
+        "name": "Fake Visitor B",
+        "email": null
+      }
+    }
+  ],
+  "nextCursor": "MTc2MDk0NzIwMDAwMDoxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTE"
+}
+
+=== [16] GET /v1/conversations?limit=1&cursor=… (page 2) — 200 ===
+{
+  "items": [
+    {
+      "id": "00000004-0000-4000-8000-000000000000",
+      "status": "open",
+      "assignedTo": null,
+      "subject": null,
+      "closedAt": null,
+      "lastMessageAt": "2026-10-17T13:13:40.926Z",
+      "createdAt": "2026-10-17T13:13:40.926Z",
+      "visitor": {
+        "id": "00000003-0000-4000-8000-000000000000",
+        "name": "Fake Visitor A",
+        "email": null
+      }
+    }
+  ],
+  "nextCursor": null
+}
+
+=== [17] GET /v1/conversations?status=open&assignee=unassigned&limit=50 — 200 ===
+{
+  "items": [
+    {
+      "id": "00000006-0000-4000-8000-000000000000",
+      "status": "open",
+      "assignedTo": null,
+      "subject": null,
+      "closedAt": null,
+      "lastMessageAt": "2026-10-17T13:13:40.979Z",
+      "createdAt": "2026-10-17T13:13:40.979Z",
+      "visitor": {
+        "id": "00000005-0000-4000-8000-000000000000",
+        "name": "Fake Visitor B",
+        "email": null
+      }
+    },
+    {
+      "id": "00000004-0000-4000-8000-000000000000",
+      "status": "open",
+      "assignedTo": null,
+      "subject": null,
+      "closedAt": null,
+      "lastMessageAt": "2026-10-17T13:13:40.926Z",
+      "createdAt": "2026-10-17T13:13:40.926Z",
+      "visitor": {
+        "id": "00000003-0000-4000-8000-000000000000",
+        "name": "Fake Visitor A",
+        "email": null
+      }
+    }
+  ],
+  "nextCursor": null
+}
+
+=== [18] GET /v1/conversations/:id (detail) — 200 ===
+{
+  "id": "00000004-0000-4000-8000-000000000000",
+  "status": "open",
+  "assignedTo": null,
+  "subject": null,
+  "closedAt": null,
+  "lastMessageAt": "2026-10-17T13:13:40.926Z",
+  "createdAt": "2026-10-17T13:13:40.926Z",
+  "visitor": {
+    "id": "00000003-0000-4000-8000-000000000000",
+    "name": "Fake Visitor A",
+    "email": null
+  }
+}
+
+=== [19] PATCH /v1/conversations/:id — assign { assignedTo: userId } — 200 ===
+{
+  "id": "00000004-0000-4000-8000-000000000000",
+  "status": "open",
+  "assignedTo": "00000001-0000-4000-8000-000000000000",
+  "subject": null,
+  "closedAt": null,
+  "lastMessageAt": "2026-10-17T13:13:40.926Z",
+  "createdAt": "2026-10-17T13:13:40.926Z",
+  "visitor": {
+    "id": null,
+    "name": null,
+    "email": null
+  }
+}
+
+=== [20] GET /v1/conversations?assignee=me (after assign) — 200 ===
+{
+  "items": [
+    {
+      "id": "00000004-0000-4000-8000-000000000000",
+      "status": "open",
+      "assignedTo": "00000001-0000-4000-8000-000000000000",
+      "subject": null,
+      "closedAt": null,
+      "lastMessageAt": "2026-10-17T13:13:40.926Z",
+      "createdAt": "2026-10-17T13:13:40.926Z",
+      "visitor": {
+        "id": "00000003-0000-4000-8000-000000000000",
+        "name": "Fake Visitor A",
+        "email": null
+      }
+    }
+  ],
+  "nextCursor": null
+}
+
+=== [21] POST /v1/conversations/:id/messages (send #1) — 201 ===
+{
+  "id": "00000007-0000-4000-8000-000000000000",
+  "conversationId": "00000004-0000-4000-8000-000000000000",
+  "senderType": "agent",
+  "senderId": "00000001-0000-4000-8000-000000000000",
+  "body": "Hello! How can we help you today?",
+  "bodyType": "text",
+  "createdAt": "2026-10-17T13:13:41.117Z"
+}
+
+=== [22] POST /v1/conversations/:id/messages (send #2, no idempotencyKey) — 201 ===
+{
+  "id": "00000008-0000-4000-8000-000000000000",
+  "conversationId": "00000004-0000-4000-8000-000000000000",
+  "senderType": "agent",
+  "senderId": "00000001-0000-4000-8000-000000000000",
+  "body": "Thanks — we are looking into it now.",
+  "bodyType": "text",
+  "createdAt": "2026-10-17T13:13:41.134Z"
+}
+
+=== [23] POST /v1/conversations/:id/messages (send #3) — 201 ===
+{
+  "id": "00000009-0000-4000-8000-000000000000",
+  "conversationId": "00000004-0000-4000-8000-000000000000",
+  "senderType": "agent",
+  "senderId": "00000001-0000-4000-8000-000000000000",
+  "body": "Anything else we can check for you?",
+  "bodyType": "text",
+  "createdAt": "2026-10-17T13:13:41.145Z"
+}
+
+=== [24] GET /v1/conversations/:id/messages?limit=2 (newest page) — 200 ===
+{
+  "items": [
+    {
+      "id": "00000008-0000-4000-8000-000000000000",
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "senderType": "agent",
+      "senderId": "00000001-0000-4000-8000-000000000000",
+      "body": "Thanks — we are looking into it now.",
+      "bodyType": "text",
+      "createdAt": "2026-10-17T13:13:41.134Z"
+    },
+    {
+      "id": "00000009-0000-4000-8000-000000000000",
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "senderType": "agent",
+      "senderId": "00000001-0000-4000-8000-000000000000",
+      "body": "Anything else we can check for you?",
+      "bodyType": "text",
+      "createdAt": "2026-10-17T13:13:41.145Z"
+    }
+  ],
+  "nextCursor": "MTc2MDk0NzIwMDAwMDoxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTE"
+}
+
+=== [25] GET /v1/conversations/:id/messages?before=… (older page) — 200 ===
+{
+  "items": [
+    {
+      "id": "00000007-0000-4000-8000-000000000000",
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "senderType": "agent",
+      "senderId": "00000001-0000-4000-8000-000000000000",
+      "body": "Hello! How can we help you today?",
+      "bodyType": "text",
+      "createdAt": "2026-10-17T13:13:41.117Z"
+    }
+  ],
+  "nextCursor": null
+}
+
+=== [26] PATCH /v1/conversations/:id — resolve { status: "closed" } — 200 ===
+{
+  "id": "00000004-0000-4000-8000-000000000000",
+  "status": "closed",
+  "assignedTo": "00000001-0000-4000-8000-000000000000",
+  "subject": null,
+  "closedAt": "2026-10-17T13:13:41.176Z",
+  "lastMessageAt": "2026-10-17T13:13:41.145Z",
+  "createdAt": "2026-10-17T13:13:40.926Z",
+  "visitor": {
+    "id": null,
+    "name": null,
+    "email": null
+  }
+}
+
+=== [27] POST /v1/conversations/:id/messages (closed conversation) — 400 ===
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Conversation is closed"
+  }
+}
+
+=== [28] PATCH /v1/conversations/:id — reopen { status: "open" } — 200 ===
+{
+  "id": "00000004-0000-4000-8000-000000000000",
+  "status": "open",
+  "assignedTo": "00000001-0000-4000-8000-000000000000",
+  "subject": null,
+  "closedAt": null,
+  "lastMessageAt": "2026-10-17T13:13:41.145Z",
+  "createdAt": "2026-10-17T13:13:40.926Z",
+  "visitor": {
+    "id": null,
+    "name": null,
+    "email": null
+  }
+}
+
+=== [29] GET /v1/conversations (no Authorization) — 401 ===
+{
+  "error": {
+    "code": "unauthenticated",
+    "message": "Authentication required"
+  }
+}
+
+=== [30] GET /v1/conversations (garbage token) — 401 ===
+{
+  "error": {
+    "code": "unauthenticated",
+    "message": "Authentication required"
+  }
+}
+
+=== [31] GET /v1/conversations/not-a-uuid — 400 ===
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Invalid id"
+  }
+}
+
+=== [32] GET /v1/conversations/<unknown uuid> — 404 ===
+{
+  "error": {
+    "code": "not_found",
+    "message": "Conversation not found"
+  }
+}
+
+=== [33] GET /v1/conversations?limit=999 (out of range → details) — 400 ===
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Validation failed",
+    "details": [
+      {
+        "code": "too_big",
+        "maximum": 100,
+        "type": "number",
+        "inclusive": true,
+        "exact": false,
+        "message": "Number must be less than or equal to 100",
+        "path": [
+          "limit"
+        ]
+      }
+    ]
+  }
+}
+
+=== [34] PATCH /v1/conversations/:id {} (empty body) — 400 ===
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Validation failed",
+    "details": [
+      {
+        "code": "custom",
+        "message": "At least one field to update is required",
+        "path": []
+      }
+    ]
+  }
+}
+
+=== [35] POST …/messages with unknown field (strict schema) — 400 ===
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Validation failed",
+    "details": [
+      {
+        "code": "unrecognized_keys",
+        "keys": [
+          "nonsense"
+        ],
+        "path": [],
+        "message": "Unrecognized key(s) in object: 'nonsense'"
+      }
+    ]
+  }
+}
+
+=== [36] GET /v1/nope (route does not exist) — 404 ===
+{
+  "error": {
+    "code": "http_error",
+    "message": "Cannot GET /v1/nope"
+  }
+}
+
+=== [37] POST /v1/auth/login (malformed JSON) — 400 ===
+{
+  "error": {
+    "code": "http_error",
+    "message": "Unexpected end of JSON input"
+  }
+}
+
+=== [38] POST /v1/auth/forgot-password (6th call/min → 429) — 429 ===
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "Too many requests. Retry after 60s"
+  }
+}
+
+=== [39] Socket.IO connect with invalid auth.token — connect_error ===
+{
+  "message": "unauthorized"
+}
+
+=== [40] Socket.IO connect with NO auth.token — connect_error ===
+{
+  "message": "unauthorized"
+}
+
+=== [41] Socket.IO connect (agent, auth.token = accessToken) — connected ===
+{
+  "connected": true,
+  "path": "/ws",
+  "autoRooms": [
+    "workspace:{workspaceId}",
+    "agent:{userId}"
+  ]
+}
+
+=== [42] WS ack — conversation:join (agent) — 200 ===
+{
+  "ok": true,
+  "conversationId": "00000004-0000-4000-8000-000000000000"
+}
+
+=== [43] WS ack — message:send (agent) — 200 ===
+{
+  "ok": true,
+  "message": {
+    "id": "00000010-0000-4000-8000-000000000000",
+    "conversationId": "00000004-0000-4000-8000-000000000000",
+    "senderType": "agent",
+    "senderId": "00000001-0000-4000-8000-000000000000",
+    "body": "Realtime reply from the agent.",
+    "bodyType": "text",
+    "createdAt": "2026-10-17T13:13:41.521Z"
+  }
+}
+
+=== [44] WS ack — typing (agent) — 200 ===
+{
+  "ok": true
+}
+
+=== [45] Socket.IO connect (visitor token from visitor_init) — connected ===
+{
+  "connected": true
+}
+
+=== [46] WS ack — message:send BEFORE conversation:join — 200 ===
+{
+  "ok": false,
+  "error": {
+    "code": "forbidden",
+    "message": "Join the conversation before sending"
+  }
+}
+
+=== [47] WS ack — conversation:join (visitor) — 200 ===
+{
+  "ok": true,
+  "conversationId": "00000004-0000-4000-8000-000000000000"
+}
+
+=== [48] WS ack — typing (visitor) — 200 ===
+{
+  "ok": true
+}
+
+=== [49] WS ack — message:send (visitor) — 200 ===
+{
+  "ok": true,
+  "message": {
+    "id": "00000011-0000-4000-8000-000000000000",
+    "conversationId": "00000004-0000-4000-8000-000000000000",
+    "senderType": "visitor",
+    "senderId": "00000003-0000-4000-8000-000000000000",
+    "body": "Hi — I need help with my order.",
+    "bodyType": "text",
+    "createdAt": "2026-10-17T13:13:41.761Z"
+  }
+}
+
+=== [50] WS ack — conversation:leave (agent) — 200 ===
+{
+  "ok": true
+}
+
+=== [51] Socket.IO server→client events observed (in order) — 200 ===
+[
+  {
+    "event": "message:new",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "message": {
+        "id": "00000010-0000-4000-8000-000000000000",
+        "conversationId": "00000004-0000-4000-8000-000000000000",
+        "senderType": "agent",
+        "senderId": "00000001-0000-4000-8000-000000000000",
+        "body": "Realtime reply from the agent.",
+        "bodyType": "text",
+        "createdAt": "2026-10-17T13:13:41.521Z"
+      }
+    }
+  },
+  {
+    "event": "conversation:updated",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "lastMessageAt": "2026-10-17T13:13:41.521Z"
+    }
+  },
+  {
+    "event": "visitor:presence",
+    "payload": {
+      "visitorId": "00000003-0000-4000-8000-000000000000",
+      "online": true
+    }
+  },
+  {
+    "event": "typing",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "typing": true,
+      "by": "visitor",
+      "senderId": "00000003-0000-4000-8000-000000000000"
+    }
+  },
+  {
+    "event": "message:new",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "message": {
+        "id": "00000011-0000-4000-8000-000000000000",
+        "conversationId": "00000004-0000-4000-8000-000000000000",
+        "senderType": "visitor",
+        "senderId": "00000003-0000-4000-8000-000000000000",
+        "body": "Hi — I need help with my order.",
+        "bodyType": "text",
+        "createdAt": "2026-10-17T13:13:41.761Z"
+      }
+    }
+  },
+  {
+    "event": "conversation:updated",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "lastMessageAt": "2026-10-17T13:13:41.761Z"
+    }
+  },
+  {
+    "event": "conversation:updated",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "status": "pending",
+      "assignedTo": "00000001-0000-4000-8000-000000000000"
+    }
+  },
+  {
+    "event": "conversation:updated",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "status": "pending",
+      "assignedTo": "00000001-0000-4000-8000-000000000000"
+    }
+  },
+  {
+    "event": "message:new",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "message": {
+        "id": "00000012-0000-4000-8000-000000000000",
+        "conversationId": "00000004-0000-4000-8000-000000000000",
+        "senderType": "agent",
+        "senderId": "00000001-0000-4000-8000-000000000000",
+        "body": "REST send while sockets listen.",
+        "bodyType": "text",
+        "createdAt": "2026-10-17T13:13:42.117Z"
+      }
+    }
+  },
+  {
+    "event": "conversation:updated",
+    "payload": {
+      "conversationId": "00000004-0000-4000-8000-000000000000",
+      "lastMessageAt": "2026-10-17T13:13:42.117Z"
+    }
+  },
+  {
+    "event": "visitor:presence",
+    "payload": {
+      "visitorId": "00000003-0000-4000-8000-000000000000",
+      "online": false
+    }
+  }
+]
+
+=== [52] POST /v1/invitations (owner invites an agent) — 201 ===
+{
+  "invitationId": "00000013-0000-4000-8000-000000000000",
+  "token": "<fake-token>"
+}
+
+=== [53] POST /v1/invitations/accept (new user → session with role "agent") — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "user": {
+    "id": "00000014-0000-4000-8000-000000000000",
+    "email": "agent.test@example.com",
+    "name": "Fake Agent",
+    "emailVerifiedAt": null,
+    "totpEnabled": false
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "agent"
+}
+
+=== [54] GET /v1/members as agent → 403 (members:read = owner/admin only) — 403 ===
+{
+  "error": {
+    "code": "forbidden",
+    "message": "Insufficient role"
+  }
+}
+
+=== [55] POST /v1/invitations as agent → 403 (members:invite = owner/admin only) — 403 ===
+{
+  "error": {
+    "code": "forbidden",
+    "message": "Insufficient role"
+  }
+}
+
+=== [56] GET /v1/conversations as agent → 200 (conversations:read allows agent) — 200 ===
+{
+  "itemsCount": 1,
+  "nextCursorType": "string"
+}
+
+=== [57] POST /v1/auth/refresh (success — token rotates) — 200 ===
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.FAKE_ACCESS_CLAIMS.c2lnbmF0dXJlLWZha2U",
+  "refreshToken": "ZmFrZS1yZWZyZXNoLXRva2VuLTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+  "user": {
+    "id": "00000001-0000-4000-8000-000000000000",
+    "email": "owner.test@example.com",
+    "name": "Test Owner",
+    "emailVerifiedAt": null,
+    "totpEnabled": true
+  },
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== [58] POST /v1/auth/refresh (reuse of rotated token → family revoked) — 401 ===
+{
+  "error": {
+    "code": "invalid_credentials",
+    "message": "Refresh token reuse detected; sessions revoked"
+  }
+}
+
+=== [59] POST /v1/auth/refresh (no token at all) — 401 ===
+{
+  "error": {
+    "code": "unauthenticated",
+    "message": "Missing refresh token"
+  }
+}
+
+=== [60] POST /v1/auth/logout — 200 ===
+{
+  "ok": true
+}
+
+=== [61] POST /v1/auth/logout-all (Bearer; browser keeps its cookie session) — 200 ===
+{
+  "revoked": 4
+}
+
+=== [62] POST /v1/auth/refresh (after logout-all → 401) — 401 ===
+{
+  "error": {
+    "code": "invalid_credentials",
+    "message": "Refresh token reuse detected; sessions revoked"
+  }
+}
+
+=== [63] POST /v1/auth/logout (idempotent — no credentials) — 200 ===
+{
+  "ok": true
+}
+
+=== [64] GET /v1/auth/me (access token still valid — JWT is stateless) — 200 ===
+{
+  "userId": "00000001-0000-4000-8000-000000000000",
+  "workspaceId": "00000002-0000-4000-8000-000000000000",
+  "role": "owner"
+}
+
+=== PROBE COMPLETE ===

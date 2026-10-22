@@ -1,8 +1,54 @@
 ﻿---
-import Layout from '../../../../../../../../../../../../../layouts/Layout.astro';
+import Layout from '../layouts/Layout.astro';
+
+const CARDS = [
+  { tag: '01', title: 'Realtime inbox', body: 'WebSocket-powered messages with typing indicators, assignment, and status — no refresh, ever.' },
+  { tag: '02', title: 'Customizable widget', body: 'Brand color, greeting, position, pre-chat fields, and offline mode — configured per workspace, no rebuild.' },
+  { tag: '03', title: 'Workspace isolation', body: 'Row-level security keeps every customer\'s conversations in their own sealed workspace.' },
+  { tag: '04', title: 'Roles and invites', body: 'Owner, admin, and agent roles with signed invite links. Least privilege by default.' },
+  { tag: '05', title: '2FA and audit log', body: 'TOTP two-factor with recovery codes, plus an append-only trail of every privileged action.' },
+  { tag: '06', title: 'API keys', body: 'Scoped widget keys (pk_...) you can rotate or revoke instantly from the dashboard.' },
+];
 ---
 
-<Layout title="Features" description="LiveChat features">
-<h1>Features</h1>
-<p>Live chat with customisation.</p>
+<Layout
+  title="Features — LiveChat"
+  description="Everything you need to answer customers in realtime: inbox, widget, isolation, roles, 2FA, audit log, API keys."
+>
+  <section class="page-head">
+    <h1>Everything you need, nothing you don&rsquo;t.</h1>
+    <p>Built for teams that want chat on their site today — not after a six-week rollout.</p>
+  </section>
+  <section class="grid">
+    {CARDS.map((c, i) => (
+      <article class="card" style={`animation-delay: ${0.05 + i * 0.08}s`}>
+        <span class="tag">{c.tag}</span>
+        <h2>{c.title}</h2>
+        <p>{c.body}</p>
+      </article>
+    ))}
+  </section>
 </Layout>
+
+<style>
+  .page-head { max-width: var(--max-hero); margin: 72px auto 0; text-align: center; animation: fade-up 0.9s var(--ease) both; }
+  .page-head h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0; }
+  .page-head p { color: var(--muted); font-size: 17px; margin: 16px 0 0; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 56px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 24px;
+    animation: fade-up 0.9s var(--ease) both;
+    transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+  .card:hover { transform: translateY(-3px); border-color: var(--border-hover); }
+  .tag { font-family: var(--font-mono); font-size: 12px; color: var(--faint); }
+  .card h2 { font-size: 17px; font-weight: 600; margin: 10px 0 8px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  @media (max-width: 860px) {
+    .page-head h1 { font-size: 36px; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>

@@ -1,0 +1,73 @@
+﻿---
+import Layout from '../layouts/Layout.astro';
+
+const TILES = [
+  { slug: 'custom-html', name: 'Custom HTML', body: 'One script tag before </body>. Works with any site.' },
+  { slug: 'wordpress', name: 'WordPress', body: 'Drop the snippet into your theme footer or a snippet plugin.' },
+  { slug: 'react', name: 'React', body: 'Mount the widget once in your app root — no wrapper package needed.' },
+  { slug: 'nextjs', name: 'Next.js', body: 'Load the snippet in your root layout; works in App and Pages routers.' },
+];
+const SOON = ['REST API / webhooks', 'More frameworks'];
+---
+
+<Layout
+  title="Integrations — LiveChat"
+  description="Add the LiveChat widget to custom HTML, WordPress, React, or Next.js in minutes."
+>
+  <section class="page-head">
+    <h1>Works where your site works.</h1>
+    <p>One script tag — pick the integration that matches your stack.</p>
+  </section>
+  <section class="grid">
+    {TILES.map((t, i) => (
+      <a class="card" href={`/integrations/${t.slug}`} style={`animation-delay: ${0.05 + i * 0.08}s`}>
+        <h2>{t.name}</h2>
+        <p>{t.body}</p>
+        <span class="go" aria-hidden="true">&rarr;</span>
+      </a>
+    ))}
+  </section>
+  <section class="soon">
+    <h2>Coming soon</h2>
+    <div class="soon-row">
+      {SOON.map((s) => <span class="chip">{s}</span>)}
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .page-head { max-width: var(--max-hero); margin: 72px auto 0; text-align: center; animation: fade-up 0.9s var(--ease) both; }
+  .page-head h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0; }
+  .page-head p { color: var(--muted); font-size: 17px; margin: 16px 0 0; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 56px; }
+  .card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 24px;
+    color: inherit;
+    text-decoration: none;
+    animation: fade-up 0.9s var(--ease) both;
+    transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+  .card:hover { transform: translateY(-3px); border-color: var(--border-hover); text-decoration: none; }
+  .card h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .go { position: absolute; top: 24px; right: 24px; color: var(--faint); }
+  .soon { margin-top: 56px; }
+  .soon h2 { font-size: 17px; font-weight: 600; }
+  .soon-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--faint);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 6px 14px;
+  }
+  @media (max-width: 860px) {
+    .page-head h1 { font-size: 36px; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>

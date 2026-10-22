@@ -1,40 +1,184 @@
 ---
-// Home page – SEO first
+import Layout from '../layouts/Layout.astro';
 ---
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LiveChat – Live Chat for Every Website</title>
-  <meta name="description" content="Add a live chat widget to your website in one line of code. Free for small teams, grows with you." />
-  <link rel="canonical" href="https://chat.example.com/" />
-  <meta property="og:title" content="LiveChat – Live Chat for Every Website" />
-  <meta property="og:description" content="Add a live chat widget to your website in one line of code." />
-  <meta property="og:url" content="https://chat.example.com/" />
-  <meta property="og:type" content="website" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>" />
-</head>
-<body>
-  <header>
-    <h1>LiveChat</h1>
-    <nav>
-      <a href="/login">Log In</a>
-      <a href="/signup">Sign Up</a>
-    </nav>
-  </header>
+<Layout
+  title="LiveChat — Live chat that gets out of the way"
+  description="One script tag. A realtime inbox. Separate, secure data for every customer. Add live chat to your site in minutes."
+>
+  <section class="hero">
+    <a class="pill" href="/pricing">New: per-workspace isolation and audit logs <span aria-hidden="true">&rarr;</span></a>
+    <h1>Live chat that gets out of the way.</h1>
+    <p class="sub">
+      One script tag. A realtime inbox. Separate, secure data for every customer.
+    </p>
+    <div class="ctas">
+      <a class="btn-primary" href="/signup">Start for free</a>
+      <a class="btn-outline" href="/demo">Live demo</a>
+    </div>
+    <pre class="snippet"><code>&lt;script src="https://cdn.example.com/widget.js" data-public-key="pk_..." async&gt;&lt;/script&gt;<span class="cursor" aria-hidden="true">&#9608;</span></code></pre>
+  </section>
 
-  <main>
-    <section>
-      <h2>Start chatting today</h2>
-      <p>Add a live chat widget to your website in one line of code. Free for small teams, grows with you.</p>
-      <a href="/signup" class="btn primary">Get started</a>
-    </section>
-  </main>
+  <section class="preview" aria-label="Product preview">
+    <div class="preview-app">
+      <div class="preview-side">
+        <span class="preview-side-item active"></span>
+        <span class="preview-side-item"></span>
+        <span class="preview-side-item"></span>
+      </div>
+      <div class="preview-thread">
+        <div class="preview-bubble in d1">Hi — do you ship to Canada?</div>
+        <div class="preview-bubble out d2">Yes! Orders before 3pm ship same day.</div>
+        <div class="preview-bubble in d3">Perfect, ordering now.</div>
+      </div>
+    </div>
+  </section>
 
-  <footer>
-    <p>&copy; 2026 LiveChat. All rights reserved.</p>
-  </footer>
-</body>
-</html>
+  <section class="features">
+    <article class="card">
+      <h3>Realtime inbox</h3>
+      <p>Messages land instantly over WebSockets. Reply from a dark, fast, keyboard-friendly inbox.</p>
+    </article>
+    <article class="card">
+      <h3>Workspace isolation</h3>      <p>Every customer gets their own workspace with row-level security. No shared tables, ever.</p>
+    </article>
+    <article class="card">
+      <h3>Secure by default</h3>
+      <p>2FA, roles, invites, API keys, and a full audit log — included on every plan.</p>
+    </article>
+  </section>
+
+  <section class="final-cta">
+    <h2>Add chat to your site today.</h2>
+    <a class="btn-primary" href="/signup">Create free account</a>
+  </section>
+</Layout>
+
+<style>
+  .hero {
+    max-width: var(--max-hero);
+    margin: 96px auto 0;
+    text-align: center;
+    animation: fade-up 0.9s var(--ease) both;
+    position: relative;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -120px;
+    left: 50%;
+    width: 600px;
+    height: 420px;
+    transform: translateX(-50%);
+    background: radial-gradient(closest-side, rgba(110, 106, 240, 0.35), transparent);
+    filter: blur(20px);
+    animation: glow-drift 9s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent-text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 6px 14px;
+    text-decoration: none;
+    transition: border-color 0.2s var(--ease);
+  }
+  .pill:hover { border-color: var(--border-hover); }
+  h1 {
+    font-size: 68px;
+    line-height: 1.04;
+    letter-spacing: -0.035em;
+    font-weight: 600;
+    margin: 28px 0 0;
+  }
+  .sub {
+    font-size: 19px;
+    color: var(--muted);
+    max-width: 560px;
+    margin: 20px auto 0;
+  }
+  .ctas { display: flex; gap: 12px; justify-content: center; margin-top: 32px; }
+  .snippet {
+    margin: 48px auto 0;
+    max-width: 640px;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--muted);
+    overflow-x: auto;
+  }
+  .cursor { color: var(--accent); animation: cursor-blink 1s steps(1) infinite; }
+
+  .preview { max-width: 880px; margin: 72px auto 0; }
+  .preview-app {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    min-height: 300px;
+  }
+  .preview-side { border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .preview-side-item { height: 10px; border-radius: 6px; background: var(--surface-2); }
+  .preview-side-item.active { background: var(--accent-soft); }
+  .preview-thread { padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+  .preview-bubble {
+    max-width: 60%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    animation: fade-up 0.9s var(--ease) both;
+  }
+  .preview-bubble.in { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .preview-bubble.out { align-self: flex-end; background: var(--text); color: var(--bg); border-bottom-right-radius: 4px; }
+  .d1 { animation-delay: 0.1s; }
+  .d2 { animation-delay: 0.25s; }
+  .d3 { animation-delay: 0.4s; }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 96px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 24px;
+    transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+    animation: fade-up 0.9s var(--ease) both;
+  }
+  .card:nth-child(1) { animation-delay: 0.05s; }
+  .card:nth-child(2) { animation-delay: 0.13s; }
+  .card:nth-child(3) { animation-delay: 0.21s; }
+  .card:hover { transform: translateY(-3px); border-color: var(--border-hover); }
+  .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .final-cta {
+    margin-top: 96px;
+    text-align: center;
+    padding: 64px 24px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+  }
+  .final-cta h2 { font-size: 40px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 24px; }
+  @media (max-width: 860px) {
+    h1 { font-size: 44px; }
+    .features { grid-template-columns: 1fr; }
+    .final-cta h2 { font-size: 28px; }
+  }
+</style>

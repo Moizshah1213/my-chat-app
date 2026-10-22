@@ -1,0 +1,40 @@
+﻿---
+import Layout from '../layouts/Layout.astro';
+
+const SYSTEMS = [
+  { name: 'API', status: 'Operational' },
+  { name: 'Dashboard', status: 'Operational' },
+  { name: 'Widget delivery', status: 'Operational' },
+  { name: 'WebSockets (realtime)', status: 'Operational' },
+];
+---
+
+<Layout title="Status - LiveChat" description="Current availability of LiveChat systems: API, dashboard, widget delivery, realtime.">
+  <section class="page-head">
+    <h1>Status</h1>
+    <p>Live systems at a glance. Text-first, no charts.</p>
+  </section>
+  <section class="status-list">
+    {SYSTEMS.map((s, i) => (
+      <div class="row" style={`animation-delay: ${0.05 + i * 0.08}s`}>
+        <span class="dot" aria-hidden="true" />
+        <span class="name">{s.name}</span>
+        <span class="state">{s.status}</span>
+      </div>
+    ))}
+    <p class="note">This page is a static overview. For incidents, follow the changelog or contact support.</p>
+  </section>
+</Layout>
+
+<style>
+  .page-head { max-width: var(--max-hero); margin: 72px auto 0; animation: fade-up 0.9s var(--ease) both; }
+  .page-head h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0; }
+  .page-head p { color: var(--muted); font-size: 17px; margin: 16px 0 0; }
+  .status-list { max-width: 720px; margin: 40px auto 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); animation: fade-up 0.9s var(--ease) both; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+  .name { font-weight: 600; flex: 1; }
+  .state { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+  .note { color: var(--faint); font-size: 13px; padding: 14px 18px; margin: 0; }
+  @media (max-width: 860px) { .page-head h1 { font-size: 36px; } }
+</style>

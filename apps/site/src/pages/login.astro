@@ -1,30 +1,36 @@
----
-// Login page – form posts to /api/auth/login on the API
+﻿---
+// B.5: auth lives in the dashboard app (:3000) — the site only links out.
+import Layout from '../layouts/Layout.astro';
+const DASHBOARD = import.meta.env.PUBLIC_DASHBOARD_URL ?? 'http://localhost:3000';
 ---
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Log In — LiveChat</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 4rem auto; padding: 0 1rem; }
-    input { display:block; width:100%; margin:0.5rem 0; padding:0.5rem; }
-    button { padding:0.6rem 1rem; }
-    .btn.primary { background:#4f46e5; color:#fff; }
-  </style>
-</head>
-<body>
-  <main>
-    <h2>Log In</h2>
-    <form method="post" action="/api/auth/login">
-      <input type="email" name="email" placeholder="Email" required />
-      <input type="password" name="password" placeholder="Password" required />
-      <button type="submit" class="btn primary">Log In</button>
-    </form>
-    <p><a href="/forgot-password">Forgot password?</a></p>
-    <p><a href="/signup">Create an account</a></p>
-  </main>
-</body>
-</html>
+<Layout
+  title="Log in - LiveChat"
+  description="Log in to your LiveChat workspace."
+>
+  <section class="redirect-card">
+    <h1>Log in</h1>
+    <p>Signing in opens your workspace dashboard.</p>
+    <a class="btn-primary" href={`${DASHBOARD}/login`}>Continue to dashboard</a>
+    <p class="alt">No account? <a href="/signup">Create one</a></p>
+    <script is:inline define:vars={{ DASHBOARD }}>
+      window.location.replace(DASHBOARD + '/login');
+    </script>
+  </section>
+</Layout>
+
+<style>
+  .redirect-card {
+    max-width: var(--max-form);
+    margin: 96px auto 0;
+    text-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 40px 32px;
+    animation: fade-up 0.9s var(--ease) both;
+  }
+  .redirect-card h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 8px; }
+  .redirect-card p { color: var(--muted); margin: 0 0 24px; }
+  .alt { margin-top: 18px; margin-bottom: 0; font-size: 13px; }
+</style>

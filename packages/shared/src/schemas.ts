@@ -43,6 +43,32 @@ export const resetPasswordSchema = strict({
 
 export const totpVerifySchema = strict({ code: z.string().regex(/^\d{6}$/) });
 
+/**
+ * POST /v1/auth/2fa/verify with `{ code, tempToken }` — the mobile two-step
+ * login: `login` returns `{ requires2fa: true, tempToken }`, the client then
+ * proves the second factor. `tempToken` is a short-lived signed JWT (audience
+ * distinct from access tokens), NOT a bearer credential for API calls.
+ * The same endpoint still accepts `{ code }` alone (Bearer-authenticated)
+ * for the 2FA enrollment flow — see auth.controller.ts.
+ */
+export const twoFactorLoginSchema = strict({
+  code: z
+    .string()
+    .min(6)
+    .max(20)
+    .regex(/^(\d{6}|[a-z0-9]{5}-[a-z0-9]{5})$/i, 'Expected a 6-digit code or a recovery code'),
+  tempToken: z.string().min(20).max(2000),
+});
+
+/**
+ * POST /v1/auth/refresh and /v1/auth/logout body: mobile clients (no usable
+ * cookies) present the refresh token in the body; browsers send only the
+ * HttpOnly cookie. One of the two must be present — checked in the controller.
+ */
+export const refreshTokenBodySchema = strict({
+  refreshToken: z.string().min(1).max(512).optional(),
+});
+
 /** POST /v1/auth/2fa/disable — password + (TOTP or recovery) code to turn 2FA off. */
 export const disable2faSchema = strict({
   password: z.string().min(1).max(256),

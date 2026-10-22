@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { BRAND } from '@/config/brand';
 import { ApiError } from '@/lib/api';
 
 export default function LoginPage() {
@@ -22,7 +23,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await signIn(email, password, needs2fa ? totpCode : undefined);
-      router.replace('/conversations');
+      router.replace('/overview');
     } catch (err) {
       if (err instanceof ApiError && err.details) setNeeds2fa(true);
       setError(err instanceof Error ? err.message : 'Sign in failed');
@@ -34,6 +35,7 @@ export default function LoginPage() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
+        <div className="lg big">{BRAND.product.charAt(0)}</div>
         <h1>Sign in</h1>
         <p className="sub">Welcome back to your live chat dashboard.</p>
         {error && <div className="alert error">{error}</div>}

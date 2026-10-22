@@ -269,6 +269,24 @@ describe('Two-factor auth + session management', () => {
     // Login now demands the second factor, rejects a wrong one, accepts a fresh TOTP.
     const needs = await authService.login({ email, password: 'correct-horse-battery' });
     assert.ok('requires2fa' in needs && needs.requires2fa, 'login demands 2FA');
+    const tempToken = (needs as { tempToken?: string }).tempToken;
+    assert.ok(tempToken && tempToken.length > 20, 'tempToken bridges the two-step flow');
+
+    // Two-step completion (mobile): tempToken + code, no password resend.
+    await assert.rejects(
+      () => authService.completeTwoFactorLogin({ tempToken: tempToken!, code: '000000' }),
+      /Invalid authentication code/,
+    );
+    const stepped = await authService.completeTwoFactorLogin({
+      tempToken: tempToken!,
+      code: authenticator.generate(setup.secret),
+    });
+    assert.ok('accessToken' in stepped && stepped.refreshToken, 'session issued on tempToken + code');
+    // Garbage tempToken rejected before any DB work.
+    await assert.rejects(
+      () => authService.completeTwoFactorLogin({ tempToken: 'garbage-not-a-jwt', code: '123456' }),
+      /Invalid or expired 2FA token/,
+    );
     await assert.rejects(
       () => authService.login({ email, password: 'correct-horse-battery', totpCode: '000000' }),
       /Invalid authentication code/,

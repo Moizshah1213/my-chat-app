@@ -21,9 +21,16 @@ export interface Workspace {
   slug: string;
   plan: string;
 }
+export interface ConversationVisitor {
+  id: string | null;
+  name: string | null;
+  email: string | null;
+}
 export interface Conversation {
   id: string;
+  /** Derived in this client from `visitor.id` (the API returns a nested `visitor` object). */
   visitorId: string | null;
+  visitor?: ConversationVisitor;
   status: ConversationStatus;
   assignedTo: string | null;
   subject: string | null;
@@ -33,9 +40,24 @@ export interface Conversation {
 }
 export interface Message {
   id: string;
+  conversationId?: string;
   body: string;
+  bodyType?: 'text';
   senderType: 'agent' | 'visitor';
+  senderId?: string;
   createdAt: string;
+}
+
+/** The API nests the visitor as `visitor: {id,name,email}`; the UI reads `visitorId`.
+ *  PATCH responses return `visitor` with all-null fields — treat that as "unknown". */
+export function normalizeConversation(raw: Conversation): Conversation {
+  const v = raw.visitor;
+  const hasVisitor = Boolean(v && (v.id || v.name || v.email));
+  return {
+    ...raw,
+    visitor: hasVisitor ? v : undefined,
+    visitorId: raw.visitorId ?? (hasVisitor ? (v?.id ?? null) : null),
+  };
 }
 export interface Member {
   userId: string;
@@ -161,15 +183,35 @@ async function request<T>(path: string, init: RequestInit = {}, retryOn401 = tru
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/** Single-flight refresh. The API ROTATES refresh tokens and treats re-use of an
+ *  already-rotated token as theft (revokes the whole session). Two parallel refresh
+ *  calls (React StrictMode double effects, several queries 401-ing at once) would
+ *  therefore sign the user out. Everyone shares ONE in-flight request instead. */
+let refreshInFlight: Promise<Session> | null = null;
+
+export function refreshSession(): Promise<Session> {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const res = await fetch(`${API_URL}/v1/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        throw new ApiError(res.status, 'refresh_failed', 'Session expired');
+      }
+      const data = (await res.json()) as Session;
+      setAccessToken(data.accessToken);
+      return data;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
 async function tryRefresh(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_URL}/v1/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { accessToken: string };
-    setAccessToken(data.accessToken);
+    await refreshSession();
     return true;
   } catch {
     return false;
@@ -180,13 +222,13 @@ async function tryRefresh(): Promise<boolean> {
 export const api = {
   // --- auth ---
   login: (email: string, password: string, totpCode?: string) =>
-    request<Session | { requires2fa: true }>('/v1/auth/login', {
+    request<Session | { requires2fa: true; tempToken?: string }>('/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, totpCode }),
     }),
   signup: (input: { email: string; password: string; name: string; workspaceName: string }) =>
     request<Session>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(input) }),
-  refresh: () => request<Session>('/v1/auth/refresh', { method: 'POST' }),
+  refresh: () => refreshSession(),
   logout: () => request<unknown>('/v1/auth/logout', { method: 'POST' }),
 
   // --- workspace + team ---
@@ -218,17 +260,22 @@ export const api = {
     if (params.cursor) q.set('cursor', params.cursor);
     if (params.limit) q.set('limit', String(params.limit));
     const qs = q.toString();
-    return request<Page<Conversation>>(`/v1/conversations${qs ? `?${qs}` : ''}`);
+    return request<Page<Conversation>>(`/v1/conversations${qs ? `?${qs}` : ''}`).then((p) => ({
+      ...p,
+      items: p.items.map(normalizeConversation),
+    }));
   },
-  getConversation: (id: string) => request<Conversation>(`/v1/conversations/${id}`),
+  getConversation: (id: string) =>
+    request<Conversation>(`/v1/conversations/${id}`).then(normalizeConversation),
   listMessages: (id: string, before?: string) =>
     request<Page<Message>>(
       `/v1/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`,
     ),
-  sendMessage: (id: string, body: string) =>
+  /** Pass the SAME idempotencyKey when retrying a failed send so it can't duplicate. */
+  sendMessage: (id: string, body: string, idempotencyKey: string = crypto.randomUUID()) =>
     request<Message>(`/v1/conversations/${id}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, idempotencyKey }),
     }),
   updateConversation: (
     id: string,
@@ -237,7 +284,7 @@ export const api = {
     request<Conversation>(`/v1/conversations/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
-    }),
+    }).then(normalizeConversation),
 
   // --- api keys ---
   listApiKeys: () => request<ApiKeyView[]>('/v1/api-keys'),

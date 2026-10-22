@@ -18,8 +18,11 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   totpVerifySchema,
+  twoFactorLoginSchema,
+  refreshTokenBodySchema,
   disable2faSchema,
   AppError,
+  unauthenticated,
 } from '@livechat/shared';
 import { authService } from './auth-service.js';
 import { CurrentAuth } from './guards.js';
@@ -59,7 +62,13 @@ export class AuthController {
       target: session.user.email,
     });
     setRefreshCookie(res, session.refreshToken);
-    return { accessToken: session.accessToken, user: session.user, workspaceId: session.workspaceId, role: session.role };
+    return {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      user: session.user,
+      workspaceId: session.workspaceId,
+      role: session.role,
+    };
   }
 
   @Public()
@@ -70,7 +79,9 @@ export class AuthController {
     const input = parse(loginSchema, body);
     const result = await authService.login(input);
     if ('requires2fa' in result) {
-      return { requires2fa: true };
+      // Two-step flow: tempToken bridges back to /2fa/verify without
+      // re-sending the password (short-lived, not usable as a bearer token).
+      return { requires2fa: true, tempToken: result.tempToken };
     }
     void recordAuditFor(result.workspaceId, {
       actorId: result.user.id,
@@ -80,29 +91,49 @@ export class AuthController {
       userAgent: req.headers['user-agent'] ?? null,
     });
     setRefreshCookie(res, result.refreshToken);
-    return { accessToken: result.accessToken, user: result.user, workspaceId: result.workspaceId, role: result.role };
+    return {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: result.user,
+      workspaceId: result.workspaceId,
+      role: result.role,
+    };
   }
 
   @Public()
   @RateLimit(120, 60_000) // generous: polling clients + tab restores
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const token = (req.cookies as any)?.[REFRESH_COOKIE] as string | undefined;
+  async refresh(
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // Token source: JSON body (mobile — no usable cookies across the tunnel)
+    // or HttpOnly cookie (browser). One of the two must be present.
+    const { refreshToken: bodyToken } = parse(refreshTokenBodySchema, body ?? {});
+    const token = bodyToken ?? ((req.cookies as any)?.[REFRESH_COOKIE] as string | undefined);
     if (!token) throw new AppError('unauthenticated', 'Missing refresh token', 401);
     const session = await authService.refresh(token);
     setRefreshCookie(res, session.refreshToken);
-    return { accessToken: session.accessToken, user: session.user, workspaceId: session.workspaceId, role: session.role };
+    return {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      user: session.user,
+      workspaceId: session.workspaceId,
+      role: session.role,
+    };
   }
 
   @Public()
   @RateLimit(120, 60_000)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async logout(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     // Server-side revocation first (cookie is the client's copy of the truth),
-    // then clear the cookie. Idempotent: missing cookie still succeeds.
-    const token = (req.cookies as any)?.[REFRESH_COOKIE] as string | undefined;
+    // then clear the cookie. Idempotent: missing body + cookie still succeeds.
+    const { refreshToken: bodyToken } = parse(refreshTokenBodySchema, body ?? {});
+    const token = bodyToken ?? ((req.cookies as any)?.[REFRESH_COOKIE] as string | undefined);
     await authService.logout(token);
     res.clearCookie(REFRESH_COOKIE, { path: '/v1/auth', domain: config.cookie.domain });
     return { ok: true };
@@ -159,11 +190,52 @@ export class AuthController {
     return authService.setup2fa(auth.sub);
   }
 
-  /** Step 2: confirm a code → 2FA enabled, recovery codes returned ONCE. */
+  /**
+   * Step 2 — dual purpose:
+   *  - `{ code, tempToken }` with NO bearer: completes the two-step mobile
+   *    login started at /login → full session in the response body.
+   *  - `{ code }` with a Bearer token: confirms enrollment (step 2 of setup)
+   *    → recovery codes returned ONCE.
+   */
+  @Public() // optional auth — tempToken flow is anonymous, enrollment passes Bearer
   @RateLimit(10, 60_000) // code-guessing throttle on top of login's own limit
   @Post('2fa/verify')
   @HttpCode(HttpStatus.OK)
-  async enable2fa(@CurrentAuth() auth: { sub: string; workspaceId: string }, @Body() body: unknown) {
+  async verify2fa(
+    @CurrentAuth() auth: { sub: string; workspaceId: string } | undefined,
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const raw = (body ?? {}) as Record<string, unknown>;
+    if (raw.tempToken !== undefined) {
+      // Two-step login completion: tempToken proves /login already verified
+      // the password (short-lived, audience-scoped — never a bearer token).
+      const input = parse(twoFactorLoginSchema, body);
+      const session = await authService.completeTwoFactorLogin({
+        tempToken: input.tempToken,
+        code: input.code,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+      void recordAuditFor(session.workspaceId, {
+        actorId: session.user.id,
+        action: 'auth.login',
+        target: session.user.email,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] ?? null,
+      });
+      setRefreshCookie(res, session.refreshToken);
+      return {
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        user: session.user,
+        workspaceId: session.workspaceId,
+        role: session.role,
+      };
+    }
+    // Enrollment confirm: identity comes ONLY from the verified bearer token.
+    if (!auth) throw unauthenticated();
     const input = parse(totpVerifySchema, body);
     const result = await authService.enable2fa(auth.sub, input.code);
     void recordAuditFor(auth.workspaceId, { actorId: auth.sub, action: '2fa.enabled' });

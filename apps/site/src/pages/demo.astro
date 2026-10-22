@@ -1,0 +1,63 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Live demo - LiveChat" description="Try the widget and open the inbox side by side — a hands-on tour of LiveChat.">
+  <section class="page-head">
+    <h1>Live demo</h1>
+    <p>
+      The fastest way to see LiveChat: install the snippet on a test page, send a message, and
+      watch it land in the dashboard inbox in realtime.
+    </p>
+  </section>
+  <section class="steps-grid">
+    <article class="card">
+      <span class="tag">01</span>
+      <h2>Create a workspace</h2>
+      <p>Sign up — it takes under a minute. No credit card, no trial clock.</p>
+      <a class="btn-primary" href="/signup">Start for free</a>
+    </article>
+    <article class="card">
+      <span class="tag">02</span>
+      <h2>Add the snippet</h2>
+      <p>Mint a widget key, copy the one-line embed into any test page — plain HTML works.</p>
+      <a class="btn-outline" href="/integrations/custom-html">See the snippet</a>
+    </article>
+    <article class="card">
+      <span class="tag">03</span>
+      <h2>Answer from the inbox</h2>
+      <p>Open the dashboard in a second tab. Your message appears instantly — no refresh.</p>
+      <a class="btn-outline" href="/docs">Read the docs</a>
+    </article>
+  </section>
+</Layout>
+
+<style>
+  .page-head { max-width: var(--max-hero); margin: 72px auto 0; text-align: center; animation: fade-up 0.9s var(--ease) both; }
+  .page-head h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0; }
+  .page-head p { color: var(--muted); font-size: 17px; margin: 16px auto 0; max-width: 560px; }
+  .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 56px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    animation: fade-up 0.9s var(--ease) both;
+    transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+  .card:hover { transform: translateY(-3px); border-color: var(--border-hover); }
+  .card:nth-child(1) { animation-delay: 0.05s; }
+  .card:nth-child(2) { animation-delay: 0.13s; }
+  .card:nth-child(3) { animation-delay: 0.21s; }
+  .tag { font-family: var(--font-mono); font-size: 12px; color: var(--faint); }
+  .card h2 { font-size: 17px; font-weight: 600; margin: 0; }
+  .card p { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+  @media (max-width: 860px) {
+    .page-head h1 { font-size: 36px; }
+    .steps-grid { grid-template-columns: 1fr; }
+  }
+</style>

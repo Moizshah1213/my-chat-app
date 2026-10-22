@@ -1,0 +1,78 @@
+/* ============================================================================
+ * LiveChat design tokens — UI spec §A (single source of truth).
+ * Shared by apps/site (Astro), apps/dashboard (Next.js). The widget mirrors
+ * the same values inside its Shadow DOM (apps/widget/src/styles.ts).
+ * Direction: dark, minimalist, thin borders, one accent, no gradients.
+ * ==========================================================================*/
+:root {
+  /* A.1 colors */
+  --bg: #08090a;
+  --surface: #0d0e10;
+  --surface-2: #17181b;
+  --border: #23252a;
+  --border-hover: #3a3d45;
+  --text: #edeef0;
+  --muted: #8a8f98;
+  --faint: #6e7480;
+  --accent: #6e6af0;
+  --accent-text: #a5a8f5;
+  --primary-btn-bg: #edeef0;
+  --primary-btn-fg: #08090a;
+  --danger: #f26b6b;
+  --danger-soft: rgba(242, 107, 107, 0.14);
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --accent-soft: rgba(110, 106, 240, 0.16);
+
+  /* A.2 typography */
+  --font-sans: 'Geist', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* A.3 geometry */
+  --radius-btn: 9px;
+  --radius-card: 14px;
+  --radius-pill: 20px;
+  --max-grid: 1080px;
+  --max-hero: 900px;
+  --max-form: 400px;
+
+  /* A.4 motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* A.4 keyframes ---------------------------------------------------------- */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes glow-drift {
+  from { transform: translateX(-80px); }
+  to { transform: translateX(80px); }
+}
+@keyframes cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* A.4 rule — animations off for reduced-motion users. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* A.5 accessibility — visible accent focus ring everywhere. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

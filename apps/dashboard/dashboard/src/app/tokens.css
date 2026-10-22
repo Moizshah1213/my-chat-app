@@ -1,0 +1,130 @@
+/* ============================================================================
+ * Design tokens — source of truth for the dashboard.
+ * Palette matches the Chatly reference prototype exactly (light + dark).
+ * Light is the default; dark via [data-theme="dark"] or prefers-color-scheme.
+ * ========================================================================== */
+
+:root {
+  /* ---- prototype palette (light) ---- */
+  --bg: #e9e9eb;
+  --shell: #f3f3f4;
+  --card: #fff;
+  --soft: #f3f3f4;
+  --ink: #111;
+  --mut: #8a8a90;
+  --line: #ececee;
+  --pill: #fff;
+  --on: #111;
+  --onfg: #fff;
+  --ac: #e8562b;
+  --ac2: #f27a4e;
+  --ok: #1f9d63;
+  --okbg: #e4f5ec;
+  --bad: #d64545;
+  --badbg: #fde8e8;
+  --sh: 0 1px 2px rgba(0,0,0,.03);
+  color-scheme: light;
+
+  /* ---- legacy aliases (kept for existing rule set) ---- */
+  --surface: var(--card);
+  --surface-2: var(--soft);
+  --card-hover: #f8f8f9;
+  --border: var(--line);
+  --border-strong: #d5d5d9;
+  --border-hover: #e0e0e4;
+  --text: var(--ink);
+  --text-primary: var(--ink);
+  --text-secondary: #55555a;
+  --text-tertiary: #8a8a90;
+  --muted: var(--mut);
+  --faint: var(--mut);
+  --accent: var(--ac);
+  --accent-text: var(--ac);
+  --accent-soft: rgba(232, 86, 43, 0.12);
+  --or-subtle: rgba(232, 86, 43, 0.12);
+  --primary-btn-bg: var(--on);
+  --primary-btn-fg: var(--onfg);
+  --danger: var(--bad);
+  --danger-soft: rgba(214, 69, 69, 0.12);
+  --bad-subtle: rgba(214, 69, 69, 0.14);
+  --success: var(--ok);
+  --success-soft: rgba(31, 157, 99, 0.12);
+  --ok-subtle: rgba(31, 157, 99, 0.14);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --warn-subtle: rgba(245, 158, 11, 0.14);
+
+  /* ---- typography ---- */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+  --fs-3xs: 0.625rem;
+  --fs-2xs: 0.6875rem;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+
+  /* ---- geometry (prototype radii) ---- */
+  --radius-btn: 999px;
+  --radius-card: 26px;
+  --radius-pill: 999px;
+  --radius-md: 8px;
+  --radius: 6px;
+  --radius-field: 12px;
+  --max-grid: 1280px;
+  --max-hero: 900px;
+  --max-form: 400px;
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --warn: #d98a0b;
+  --warnbg: #fdf1dc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #050505;
+    --shell: #0c0c0d;
+    --card: #141415;
+    --soft: #1b1b1d;
+    --ink: #f4f4f5;
+    --mut: #85858c;
+    --line: #242427;
+    --pill: #161617;
+    --on: #fff;
+    --onfg: #111;
+    --okbg: #12281d;
+    --badbg: #321818;
+    --warnbg: #2e2310;
+    --text-primary: #f4f4f5;
+    --text-secondary: #b9c2cc;
+    --text-tertiary: #85858c;
+    --card-hover: #1b1b1d;
+    --border-strong: #3a3d45;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #050505;
+  --shell: #0c0c0d;
+  --card: #141415;
+  --soft: #1b1b1d;
+  --ink: #f4f4f5;
+  --mut: #85858c;
+  --line: #242427;
+  --pill: #161617;
+  --on: #fff;
+  --onfg: #111;
+  --okbg: #12281d;
+  --badbg: #321818;
+  --warnbg: #2e2310;
+  --text-primary: #f4f4f5;
+  --text-secondary: #b9c2cc;
+  --text-tertiary: #85858c;
+  --card-hover: #1b1b1d;
+  --border-strong: #3a3d45;
+  color-scheme: dark;
+}

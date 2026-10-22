@@ -53,8 +53,19 @@ async function bootstrap() {
     next();
   });
 
+  // Extra comma-separated origins (e.g. Expo dev server http://localhost:8081)
+  // appended to the standard allow-list without weakening it.
+  const extraCorsOrigins = (process.env.EXTRA_CORS_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: [config.publicAppOrigin, config.publicSiteOrigin].filter(Boolean) as string[],
+    origin: [
+      config.publicAppOrigin,
+      config.publicSiteOrigin,
+      ...extraCorsOrigins,
+    ].filter(Boolean) as string[],
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

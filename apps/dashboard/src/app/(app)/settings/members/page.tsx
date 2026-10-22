@@ -65,12 +65,8 @@ export default function MembersPage() {
   }
 
   return (
-    <>
-      <div className="topbar">
-        <h1>Team</h1>
-      </div>
-      <div className="content">
-        {error && <div className="alert error">{error}</div>}
+    <div className="page">
+      {error && <div className="alert error">{error}</div>}
         {inviteToken && (
           <div className="alert success">
             <strong>Invitation created — share this link (dev stand-in for email):</strong>
@@ -78,7 +74,7 @@ export default function MembersPage() {
               {inviteToken}
             </div>
             <button
-              className="btn secondary small"
+              className="btn s"
               style={{ marginTop: 8 }}
               onClick={() => setInviteToken('')}
             >
@@ -143,7 +139,7 @@ export default function MembersPage() {
                           value={m.role}
                           onChange={(e) => void onChangeRole(m.userId, e.target.value as Role)}
                           aria-label={`Role for ${m.userId}`}
-                          style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)' }}
+                          className="pill-select"
                         >
                           <option value="agent">agent</option>
                           <option value="admin">admin</option>
@@ -156,7 +152,7 @@ export default function MembersPage() {
                     <td className="muted">{new Date(m.createdAt).toLocaleDateString()}</td>
                     <td style={{ textAlign: 'right' }}>
                       {canManage && !isOwner && !isMe && (
-                        <button className="btn danger small" onClick={() => void onRemove(m.userId)}>
+                        <button className="btn danger sm" onClick={() => void onRemove(m.userId)}>
                           Remove
                         </button>
                       )}
@@ -179,6 +175,5 @@ export default function MembersPage() {
           </p>
         </div>
       </div>
-    </>
   );
 }

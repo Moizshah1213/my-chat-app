@@ -1,0 +1,25 @@
+﻿---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Contact - LiveChat" description="Contact the LiveChat team - sales, support, and security reports.">
+  <section class="prose">
+    <h1>Contact</h1>
+    <p>We keep it simple:</p>
+    <ul>
+      <li><strong>Sales and plans</strong> - sales@example.com</li>
+      <li><strong>Support</strong> - use the chat widget; it reaches the same inbox our team uses.</li>
+      <li><strong>Security reports</strong> - security@example.com. We acknowledge within 2 business days.</li>
+    </ul>
+  </section>
+</Layout>
+
+<style>
+  .prose { max-width: 720px; margin: 72px auto 0; animation: fade-up 0.9s var(--ease) both; }
+  .prose h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 24px; }
+  .prose p, .prose li { color: var(--muted); font-size: 16px; }
+  .prose ul { padding-left: 20px; }
+  .prose li { margin-bottom: 10px; }
+  .prose strong { color: var(--text); font-weight: 600; }
+  @media (max-width: 860px) { .prose h1 { font-size: 36px; } }
+</style>

@@ -1,0 +1,27 @@
+﻿---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Privacy - LiveChat" description="How LiveChat handles data: what we store, isolation, retention, and your rights.">
+  <section class="prose">
+    <h1>Privacy</h1>
+    <p><em>Last updated: October 2026.</em></p>
+    <h2>What we store</h2>
+    <p>Account email, workspace membership, conversations you hold through the widget, and visitor attributes you choose to send (name, email, custom key-values). We store IP and user agent for security audit purposes on sessions.</p>
+    <h2>Isolation</h2>
+    <p>Every workspace is isolated via Postgres row-level security. One customer's data is never readable by another workspace, including by support tooling.</p>
+    <h2>Retention</h2>
+    <p>Conversations are retained until you delete them. Audit entries are append-only and retained for the life of the workspace.</p>
+    <h2>Your rights</h2>
+    <p>Export or delete your workspace data at any time by contacting privacy@example.com. We action verified requests within 30 days.</p>
+  </section>
+</Layout>
+
+<style>
+  .prose { max-width: 720px; margin: 72px auto 0; animation: fade-up 0.9s var(--ease) both; }
+  .prose h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 12px; }
+  .prose h2 { font-size: 18px; font-weight: 600; margin: 28px 0 8px; }
+  .prose p { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
+  .prose em { color: var(--faint); font-style: normal; font-family: var(--font-mono); font-size: 12px; }
+  @media (max-width: 860px) { .prose h1 { font-size: 36px; } }
+</style>

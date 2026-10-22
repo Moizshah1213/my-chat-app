@@ -111,12 +111,8 @@ export default function SecurityPage() {
   }
 
   return (
-    <>
-      <div className="topbar">
-        <h1>Security</h1>
-      </div>
-      <div className="content">
-        {error && <div className="alert error">{error}</div>}
+    <div className="page">
+      {error && <div className="alert error">{error}</div>}
 
         <div className="card">
           <h2>Two-factor authentication</h2>
@@ -132,7 +128,7 @@ export default function SecurityPage() {
                 ))}
               </div>
               <button
-                className="btn secondary small"
+                className="btn s"
                 style={{ marginTop: 8 }}
                 onClick={() => setRecovery(null)}
               >
@@ -180,16 +176,7 @@ export default function SecurityPage() {
                 Add this secret to your authenticator app, then confirm with the 6-digit code it
                 shows:
               </p>
-              <div
-                className="mono"
-                style={{
-                  background: '#0f172a',
-                  color: '#e2e8f0',
-                  padding: 12,
-                  borderRadius: 8,
-                  wordBreak: 'break-all',
-                }}
-              >
+              <div className="code" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                 {pending.otpauthUrl}
               </div>
               <div className="mono muted" style={{ marginTop: 6, wordBreak: 'break-all' }}>
@@ -210,7 +197,7 @@ export default function SecurityPage() {
                 <button className="btn" type="submit" disabled={busy}>
                   {busy ? 'Verifying…' : 'Verify & enable'}
                 </button>
-                <button className="btn secondary" type="button" onClick={() => setPending(null)}>
+                <button className="btn s" type="button" onClick={() => setPending(null)}>
                   Cancel
                 </button>
               </form>
@@ -231,7 +218,7 @@ export default function SecurityPage() {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ margin: 0 }}>Sessions</h2>
-            <button className="btn secondary small" onClick={() => void onLogoutAll()}>
+            <button className="btn s" onClick={() => void onLogoutAll()}>
               Log out other sessions
             </button>
           </div>
@@ -260,7 +247,7 @@ export default function SecurityPage() {
                   <td className="muted">{new Date(s.createdAt).toLocaleString()}</td>
                   <td style={{ textAlign: 'right' }}>
                     {!s.current && (
-                      <button className="btn danger small" onClick={() => void onRevoke(s.id)}>
+                      <button className="btn danger sm" onClick={() => void onRevoke(s.id)}>
                         Revoke
                       </button>
                     )}
@@ -278,6 +265,5 @@ export default function SecurityPage() {
           </table>
         </div>
       </div>
-    </>
   );
 }

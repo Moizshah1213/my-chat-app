@@ -1,5 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
-import { API_URL } from './api';
+import { API_URL, getAccessToken, refreshSession } from './api';
 
 export type { Socket };
 
@@ -20,7 +20,24 @@ export function connectAgentSocket(
   const socket = io(API_URL, {
     path: '/ws',
     transports: ['websocket'],
-    auth: { token },
+    // Function form: every (re)connect reads the CURRENT access token (it expires every 15 min).
+    auth: (cb) => cb({ token: getAccessToken() ?? token }),
+  });
+
+  // Server rejects an expired/invalid token with connect_error {message:'unauthorized'}.
+  // Refresh once, then reconnect with the new token instead of looping on a dead one.
+  let refreshing = false;
+  socket.on('connect_error', async (err) => {
+    if (err.message !== 'unauthorized' || refreshing) return;
+    refreshing = true;
+    try {
+      await refreshSession();
+      socket.connect();
+    } catch {
+      handlers.onStatus?.('offline');
+    } finally {
+      refreshing = false;
+    }
   });
 
   socket.on('connect', () => handlers.onStatus?.('online'));

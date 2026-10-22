@@ -1,0 +1,37 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const SECTIONS = [
+  { id: 'install', title: 'Install the widget', body: 'Copy the snippet from your dashboard (Settings -> API Keys) and paste it before </body> on every page. The launcher appears immediately.' },
+  { id: 'identify', title: 'Identify logged-in users', body: 'Call window.LiveChat.identify({ name, email }) after your login flow. The widget skips the pre-chat form and attaches the identity to the conversation.' },
+  { id: 'attributes', title: 'Send custom attributes', body: 'Call window.LiveChat.setAttributes({ plan: "pro", cartValue: 42 }) to attach scalar metadata visible in the visitor profile.' },
+  { id: 'keys', title: 'API keys', body: 'Keys start with pk_ and are workspace-scoped. Rotate or revoke them anytime from the dashboard; revocation disables the widget everywhere instantly.' },
+];
+---
+
+<Layout title="Docs - LiveChat" description="Install and configure the LiveChat widget: snippet, identify, attributes, API keys.">
+  <section class="page-head">
+    <h1>Docs</h1>
+    <p>Everything you need to ship chat on your site.</p>
+  </section>
+  <section class="doc-list">
+    {SECTIONS.map((s, i) => (
+      <article id={s.id} class="card" style={`animation-delay: ${0.05 + i * 0.08}s`}>
+        <h2>{s.title}</h2>
+        <p>{s.body}</p>
+      </article>
+    ))}
+  </section>
+</Layout>
+
+<style>
+  .page-head { max-width: var(--max-hero); margin: 72px auto 0; animation: fade-up 0.9s var(--ease) both; }
+  .page-head h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0; }
+  .page-head p { color: var(--muted); font-size: 17px; margin: 16px 0 0; }
+  .doc-list { max-width: 720px; margin: 48px auto 0; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 24px; animation: fade-up 0.9s var(--ease) both; transition: border-color 0.2s var(--ease); }
+  .card:hover { border-color: var(--border-hover); }
+  .card h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  @media (max-width: 860px) { .page-head h1 { font-size: 36px; } }
+</style>

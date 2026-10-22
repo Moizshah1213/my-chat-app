@@ -1,0 +1,19 @@
+﻿---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="About - LiveChat" description="Why we are building a small, secure, self-hostable live chat platform.">
+  <section class="prose">
+    <h1>About</h1>
+    <p>LiveChat is a small live-chat platform built on one idea: customer conversations are sensitive data and should be isolated, auditable, and simple to run.</p>
+    <p>Every workspace gets its own sealed data via Postgres row-level security. Every privileged action lands in an append-only audit log. The widget is a single dependency-free script that respects the host page and the visitor&rsquo;s reduced-motion setting.</p>
+    <p>We ship dark, keyboard-friendly interfaces and avoid patterns that get in the way: no infinite settings, no per-message pricing, no dark patterns.</p>
+  </section>
+</Layout>
+
+<style>
+  .prose { max-width: 720px; margin: 72px auto 0; animation: fade-up 0.9s var(--ease) both; }
+  .prose h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 24px; }
+  .prose p { color: var(--muted); font-size: 16px; margin: 0 0 16px; }
+  @media (max-width: 860px) { .prose h1 { font-size: 36px; } }
+</style>

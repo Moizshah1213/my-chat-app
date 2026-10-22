@@ -45,8 +45,19 @@ export async function recordAuditFor(workspaceId: string, entry: AuditInput): Pr
       });
     });
   } catch (err) {
-    console.error('[audit] failed to record entry', err);
+    // E.1: failures must never vanish silently — always log action + stack.
+    const stack = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    console.error(`[audit] failed to record entry action=${entry.action} workspace=${workspaceId}`, stack);
   }
+}
+
+/**
+ * Explicit non-throwing wrapper for callers that prefer a named helper
+ * (E.1). Identical semantics to `void recordAuditFor(...)`: the promise
+ * resolves even on failure, so it can never reject into the request path.
+ */
+export async function safeRecord(workspaceId: string, entry: AuditInput): Promise<void> {
+  await recordAuditFor(workspaceId, entry);
 }
 
 export const auditService = {

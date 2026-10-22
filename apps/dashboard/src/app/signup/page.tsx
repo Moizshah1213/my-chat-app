@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { BRAND } from '@/config/brand';
 
 export default function SignupPage() {
   const { signUp } = useAuth();
@@ -26,7 +27,7 @@ export default function SignupPage() {
     setBusy(true);
     try {
       await signUp(form);
-      router.replace('/conversations');
+      router.replace('/overview');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
@@ -37,6 +38,7 @@ export default function SignupPage() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
+        <div className="lg big">{BRAND.product.charAt(0)}</div>
         <h1>Create your workspace</h1>
         <p className="sub">One line of code adds live chat to your site.</p>
         {error && <div className="alert error">{error}</div>}

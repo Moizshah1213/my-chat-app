@@ -1,0 +1,27 @@
+﻿---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Terms - LiveChat" description="Terms of service for LiveChat.">
+  <section class="prose">
+    <h1>Terms</h1>
+    <p><em>Last updated: October 2026.</em></p>
+    <h2>The service</h2>
+    <p>LiveChat provides hosted live-chat software for websites. You are responsible for the content of conversations your business holds and for the snippet you install.</p>
+    <h2>Accounts</h2>
+    <p>You are responsible for safeguarding your credentials and API keys. Workspace owners control membership and roles.</p>
+    <h2>Acceptable use</h2>
+    <p>Do not use LiveChat to transmit unlawful content, to contact people without a lawful basis, or to probe the service or other customers' data.</p>
+    <h2>Availability</h2>
+    <p>The service is provided as-is with reasonable efforts toward uptime. See /status for current availability.</p>
+  </section>
+</Layout>
+
+<style>
+  .prose { max-width: 720px; margin: 72px auto 0; animation: fade-up 0.9s var(--ease) both; }
+  .prose h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 12px; }
+  .prose h2 { font-size: 18px; font-weight: 600; margin: 28px 0 8px; }
+  .prose p { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
+  .prose em { color: var(--faint); font-style: normal; font-family: var(--font-mono); font-size: 12px; }
+  @media (max-width: 860px) { .prose h1 { font-size: 36px; } }
+</style>

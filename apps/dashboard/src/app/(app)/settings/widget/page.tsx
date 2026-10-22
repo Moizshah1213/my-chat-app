@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, type WidgetSettingsView } from '@/lib/api';
 
 const EMPTY: WidgetSettingsView = {
-  color: '#4f46e5',
+  color: '#e8562b',
   logoUrl: null,
   position: 'right',
   greeting: null,
@@ -70,12 +70,8 @@ export default function WidgetSettingsPage() {
   }
 
   return (
-    <>
-      <div className="topbar">
-        <h1>Widget Settings</h1>
-      </div>
-      <div className="content">
-        {error && <div className="alert error">{error}</div>}
+    <div className="page split">
+      {error && <div className="alert error">{error}</div>}
         {saved && <div className="alert success">Settings saved.</div>}
         <form className="card" onSubmit={onSave}>
           <h2>Appearance</h2>
@@ -165,87 +161,22 @@ export default function WidgetSettingsPage() {
 
         <div className="card">
           <h2>Live preview</h2>
-          <div
-            style={{
-              position: 'relative',
-              height: 280,
-              background: '#f1f5f9',
-              borderRadius: 10,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 76,
-                ...(form.position === 'left' ? { left: 16 } : { right: 16 }),
-                width: 250,
-                background: '#fff',
-                borderRadius: 12,
-                boxShadow: '0 10px 34px rgba(15,23,42,.22)',
-                overflow: 'hidden',
-                fontSize: 13,
-              }}
-            >
-              <div
-                style={{
-                  background: form.color,
-                  color: '#fff',
-                  padding: '10px 12px',
-                  fontWeight: 600,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
-              >
+          <div className="wp">
+            <div className="wb" style={{ bottom: 76, ...(form.position === 'left' ? { left: 16 } : { right: 16 }) }}>
+              <header style={{ background: form.color }}>
                 <span>{form.greeting ?? 'Chat with us'}</span>
                 <span aria-hidden>×</span>
+              </header>
+              <div className="wbody">
+                {form.offlineMessage && <div className="wwarn">{form.offlineMessage}</div>}
+                <div className="wbub">Hi! How can we help today?</div>
               </div>
-              <div style={{ padding: 12, minHeight: 96, color: '#475569' }}>
-                {form.offlineMessage && (
-                  <div
-                    style={{
-                      background: '#fef3c7',
-                      color: '#92400e',
-                      padding: '6px 8px',
-                      borderRadius: 8,
-                    }}
-                  >
-                    {form.offlineMessage}
-                  </div>
-                )}
-                <div
-                  style={{
-                    background: '#eef2ff',
-                    padding: '8px 10px',
-                    borderRadius: '10px 10px 10px 2px',
-                    marginTop: 8,
-                  }}
-                >
-                  Hi! How can we help today?
-                </div>
-              </div>
-              <div style={{ borderTop: '1px solid #e2e8f0', padding: '8px 12px', color: '#94a3b8' }}>
-                Type a message…
-              </div>
+              <footer>Type a message…</footer>
             </div>
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 16,
-                ...(form.position === 'left' ? { left: 16 } : { right: 16 }),
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                background: form.color,
-                color: '#fff',
-                display: 'grid',
-                placeItems: 'center',
-                boxShadow: '0 8px 18px rgba(15,23,42,.3)',
-                fontSize: 20,
-              }}
-              aria-hidden
-            >
-              💬
+            <div className="wfab" style={{ background: form.color, ...(form.position === 'left' ? { left: 16 } : { right: 16 }) }} aria-hidden>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
             </div>
           </div>
           <p className="muted" style={{ marginBottom: 0, marginTop: 10 }}>
@@ -253,6 +184,5 @@ export default function WidgetSettingsPage() {
           </p>
         </div>
       </div>
-    </>
-  );
+    );
 }

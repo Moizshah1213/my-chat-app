@@ -1,0 +1,115 @@
+﻿# Dashboard Port â€” video-style UI ko real Next.js dashboard mein lagana
+
+**Target:** `REFERENCE-dashboard-prototype.html` (is folder mein) ka *exact* look + motion, `apps/dashboard` (Next.js 15, React 19) mein, real API ke saath.
+Pehle `dashboard-fixes/FIX-AND-UI-PLAN.md` ke fixes lagao (CSS ek system, api.ts single-flight refresh, `.next` clean). Phir ye port.
+
+---
+
+## 0. Rules
+1. Prototype HTML ko **open karke dekho aur usi ki tarah banao** (spacing, radius, motion timings). Pixel-close chahiye, "inspired by" nahi.
+2. Sirf **real data** dikhao (`API_CONTRACT.md`). Jo cheez API nahi deti wo UI mein hata do ya `â€”` dikhao; sample data mat rakho.
+3. Ek hi CSS system: Tailwind v4 + `src/app/globals.css` + `src/app/tokens.css`. Purani CSS page-by-page delete.
+4. Animation sirf `transform`/`opacity`/`filter`. `MotionConfig reducedMotion="user"` poori app pe.
+5. Default theme **light** (video jaisa), toggle se dark, choice `localStorage` mein.
+
+## 1. Tokens (`tokens.css`) â€” prototype se exact
+
+| Token | Light | Dark |
+|---|---|---|
+| `--bg` | `#E9E9EC` | `#0C0C0E` |
+| `--card` | `#FFFFFF` | `#17171A` |
+| `--ink` | `#111114` | `#F3F3F5` |
+| `--mut` (muted) | `#7A7A83` | `#8C8C95` |
+| `--line` | `#ECECEF` | `#242428` |
+| `--soft` (hover/bubble) | `#F4F4F6` | `#1E1E22` |
+| `--act` (active pill) | `#111114` | `#F3F3F5` |
+| `--actt` (text on active) | `#FFFFFF` | `#111114` |
+| `--or` (accent) | `#F0561D` | same |
+| `--or2` (gradient light) | `#F58A4B` | same |
+| `--ok` | `#16A34A` | same |
+| `--sk` / `--sk2` (skeleton) | `#EDEDF0` / `#F7F7F9` | `#1E1E22` / `#26262B` |
+
+Font: Geist (+ Geist Mono 11px labels). Radius: pills 999, cards 22, bubbles 18/6. Page padding 14px, max-width 1280.
+Hero gradient: `radial-gradient(120% 140% at 85% 0%, rgba(255,255,255,.28), transparent 55%), linear-gradient(135deg, var(--or2), var(--or) 60%, #D9440F)`.
+
+## 2. Layout components (`src/components/shell/`)
+
+```
+AppShell            top bar + (rail | main)   â€” sticky rail, max-w 1280
+ â”œâ”€ TopBar          LogoPill | NavPill (center, scrollable) | ToolsPill (search, bell, help) | UserPill
+ â”œâ”€ Rail            ThemePill (sun/moon) | NavIcons (grow) | BottomPill (help, logout)   [hidden < 900px]
+ â””â”€ <main>          page content (template.tsx animates it)
+```
+- **NavPill:** items = Overview, Inbox, Visitors, Team, Widget, Settings (API keys + Audit log `Settings` ke andar tabs). Role gating: agent ko Visitors/Overview/Inbox/Settings(profile+security) hi.
+- **Active pill slide:** `motion.span layoutId="nav-pill"` active button ke peeche (spring `stiffness 380, damping 32`). Rail icons ka active circle bhi `layoutId="rail-pill"`.
+- User pill: avatar initials, name, email (real `useAuth().user`). Logout rail ke neeche + user menu.
+- Mobile (<900px): rail hide, nav pill horizontal scroll (full-width row), user text hide, grids 1 column.
+
+## 3. Motion spec (library: `motion/react`)
+
+| Effect | Prototype | Implementation |
+|---|---|---|
+| Boot skeleton -> content | shimmer ~0.9s | route `loading.tsx` + per-page skeleton (CSS `@keyframes` shimmer on `transform`/`background-position`), content swap on data ready (min 300ms jab data fast aaye taake flash na ho) |
+| Staggered entrance | `up` 0.65s, blur 8px -> 0, delay `i*70ms` | `variants={{hidden:{opacity:0,y:14,filter:'blur(8px)'},show:{opacity:1,y:0,filter:'blur(0px)'}}}`, parent `staggerChildren:0.07`, ease `[0.2,0.7,0.2,1]`, 0.65s |
+| Page transition | out: opacity 0 + blur 8 + y 6 (150ms), then in | `app/(app)/template.tsx` with `AnimatePresence mode="wait"` keyed by pathname (exit 150ms, enter = stagger above) |
+| Count-up numbers | 0 -> n in 1.1s cubic-out | `useMotionValue` + `animate(mv, n, {duration:1.1, ease:'easeOut'})`, render `useTransform(round)` |
+| Progress bar fill | width 0 -> %, 1.2s | `motion.i animate={{width}}` delay .3 |
+| Card hover | translateY -3px + shadow | `whileHover={{y:-3}}`, shadow `0 10px 28px rgba(0,0,0,.08)` (hero: `0 14px 34px rgba(240,86,29,.35)`) |
+| Button hover | scale 1.04 | `whileHover={{scale:1.04}}`; send button: `scale 1.08 rotate -8deg` |
+| New chat bubble | `up` 0.4s | `motion.div initial/animate` |
+| Row hover | bg `--soft` 200ms | CSS |
+| Theme switch | circle reveal 650ms from click point | util below |
+
+**Theme util (`src/lib/theme.ts`):**
+```ts
+export function setTheme(t: 'light'|'dark', e?: MouseEvent) {
+  const apply = () => { document.documentElement.dataset.theme = t; localStorage.setItem('theme', t); };
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!('startViewTransition' in document) || reduce) return apply();
+  const x = e?.clientX ?? innerWidth/2, y = e?.clientY ?? 0;
+  const r = Math.hypot(Math.max(x, innerWidth-x), Math.max(y, innerHeight-y));
+  (document as any).startViewTransition(apply).ready.then(() =>
+    document.documentElement.animate(
+      { clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] },
+      { duration: 650, easing: 'ease-in-out', pseudoElement: '::view-transition-new(root)' }));
+}
+```
+CSS: `::view-transition-old(root), ::view-transition-new(root){animation:none;mix-blend-mode:normal}`.
+No-flash: root layout mein chhota inline script jo `localStorage.theme` se `data-theme` pehle hi set kare (default `light`).
+
+## 4. Pages aur real data
+
+### Overview (`/`)
+- Greeting `Good morning/afternoon/evening, {first name}` (time-of-day se).
+- **Hero (orange):** "Open chats" = count of conversations `status=open` (loop `nextCursor`, cap 500, ya sirf pehla page + "50+"); progress bar = closed today / (open + closed today). Button -> Inbox.
+- **Right card:** Team (members list `GET /v1/members` â€” API sirf `userId, role` deti hai; naam/online tab tak nahi jab tak backend add na ho; abhi role badges + count). Role agent ko ye card nahi (403).
+- **Stat cards (sirf real):** Open, Pending, Closed today (client count from list). "Avg first reply" Tier B (analytics endpoint) â€” tab tak card hide.
+- **Recent conversations:** top 5 from `GET /v1/conversations?limit=5` (name `visitor.name ?? email ?? "Visitor xxxx"`, preview needs last message: abhi list mein nahi, to subject/"New conversation"; baad mein backend `lastMessage` add).
+- **Widget card:** `GET /v1/widget/settings` + api-keys `lastUsedAt` -> "Widget live / not installed yet" + Copy install snippet.
+
+### Inbox (`/conversations`, `/conversations/[id]`)
+- Left card: list (filters chips: All, Mine, Unassigned, Open, Pending, Closed), virtualized, cursor scroll, unread badge (client-side), online dot (`visitor:presence`).
+- Right: thread card (header: visitor name, page/meta, status select, assign select, Resolve). Bubbles: visitor `--soft`, agent `--or`/white. Composer + orange send. Optimistic send with `idempotencyKey`, typing indicator, realtime per `API_CONTRACT.md` Â§7.
+- Mobile: list -> thread as separate screens with back.
+
+### Visitors, Team, Widget, Settings
+Same shell/cards/motion. Content = existing pages ka logic (visitors table, members + invites, widget settings + live preview, API keys, audit log, 2FA/sessions) restyled in cards; tables ke andar row hover `--soft`, header text `--mut` 12px mono.
+
+## 5. Build phases (har phase ke baad screenshot + stop)
+1. Fixes from `FIX-AND-UI-PLAN.md`, CSS migration, tokens, fonts, theme util + no-flash script.
+2. AppShell (TopBar, NavPill with sliding pill, Rail, ThemePill) + `template.tsx` page transition + skeletons. Auth pages restyle (centered card on `--bg`, orange primary button).
+3. Overview page (hero, stats, recent, widget card) with real data + count-up.
+4. Inbox + thread + realtime + composer.
+5. Visitors, Team, Widget, Settings restyle.
+6. Polish: reduced-motion QA, a11y (aria-current on nav, labels), responsive (1440/1024/768/390), Lighthouse.
+
+## 6. Acceptance
+- Side by side with `REFERENCE-dashboard-prototype.html`: layout, colors, radius, motion visibly same, light + dark.
+- Koi sample/fake number real UI mein nahi.
+- Typecheck + build green, ek dev server, no 500s.
+- Reduce-motion pe koi animation nahi; keyboard se nav/inbox chalte hain.
+
+## 7. Cline ko ye do
+```
+Read port-kit/DASHBOARD-PORT.md and open port-kit/REFERENCE-dashboard-prototype.html in the browser; the UI must match it. First apply port-kit/dashboard-fixes (see FIX-AND-UI-PLAN.md). Then do Phase 1 only (fixes, single Tailwind v4 CSS system, tokens, theme util). Run typecheck + build, start ONE dev server, tell me what to check, and stop until I say OK.
+```

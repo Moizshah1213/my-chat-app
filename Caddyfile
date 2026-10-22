@@ -1,0 +1,6 @@
+# Place this file at the repo root (next to docker-compose.yml).
+# API_DOMAIN comes from the server's .env file.
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy api:4000
+}

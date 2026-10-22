@@ -1,0 +1,36 @@
+﻿function mark(){document.querySelectorAll('[data-p]').forEach(b=>{const a=b.dataset.p===cur;a?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current');if(b.parentElement===rail)b.classList.toggle('act',a)});const b=nav.querySelector('[aria-current]');ind.style.width=b.offsetWidth+'px';ind.style.transform=`translateX(${b.offsetLeft}px)`}
+const av=(t,on)=>`<span class="av ${on?'on':''}">${t}</span>`;
+const rows=()=>C.map((c,i)=>`<div class="row ${i==0?'sel':''}" data-c="${i}">${av(c[1],i<2)}<div class="t">
+<b>${c[0]}</b>
+<span class="m">${c[2]}</span>
+</div>
+<span class="mono">${c[3]}</span>${c[4]?`<span class="badge">${c[4]}</span>`:''}</div>`).join('');
+const V={
+ov:()=>`<h1 data-i="0">Good morning, [NAME]</h1>
+<p class="sub" data-i="1">Hereâ€™s whatâ€™s happening in your inbox today.</p>
+<div class="grid">
+<div class="card hero" data-i="2">
+<span class="tag">Live</span>
+<div class="big">
+<span data-n="24">0</span> <small>open chats</small>
+</div>
+<div class="bar">
+<i data-w="58">
+</i>
+</div>
+<small>18 resolved today Â· 7 waiting for a reply</small>
+<button class="btn" data-go="in">Open inbox</button>
+</div>
+<div class="card" data-i="3">
+<h3>Team status</h3>
+<p class="s">Who is online right now</p>${[['AK','Aisha K.','Online',1],['RM','Rahim M.','Online',1],['ZH','Zara H.','Away',0]].map(t=>`<div class="row">${av(t[0],t[3])}<div class="t">
+<b>${t[1]}</b>
+<span class="m">${t[2]}</span>
+</div>
+</div>`).join('')}</div>
+</div>
+<div class="stats">${[['Avg first reply','1m 42s','â†“ 12% vs last week'],['Resolved today','18','â†‘ 6 more than yesterday'],['Pending','7','Needs attention']].map((s,i)=>`<div class="card stat" data-i="${4+i}">
+<span class="mono">${s[0].toUpperCase()}</span>
+<b>${s[1]}</b>
+<span class="up">${s[2]}</span>
+</div>`).join('')}</div>

@@ -1,0 +1,270 @@
+﻿150	  color: var(--success);
+151	  border-color: rgba(74, 222, 128, 0.3);
+152	}
+153	.shell {
+154	  display: flex;
+155	  height: 100vh;
+156	  overflow: hidden;
+157	}
+158	.rail {
+159	  width: 56px;
+160	  flex: none;
+161	  background: var(--surface);
+162	  border-right: 1px solid var(--border);
+163	  display: flex;
+164	  flex-direction: column;
+165	  align-items: center;
+166	  padding: 12px 0;
+167	  gap: 8px;
+168	}
+169	.rail nav {
+170	  display: flex;
+171	  flex-direction: column;
+172	  gap: 6px;
+173	  margin-top: 10px;
+174	}
+175	.rail-brand {
+176	  width: 36px;
+177	  height: 36px;
+178	  border-radius: 10px;
+179	  background: var(--accent-soft);
+180	  color: var(--accent-text);
+181	  display: flex;
+182	  align-items: center;
+183	  justify-content: center;
+184	  flex: none;
+185	}
+186	.rail-brand:hover {
+187	  text-decoration: none;
+188	}
+189	.rail-btn {
+190	  position: relative;
+191	  width: 36px;
+192	  height: 36px;
+193	  border-radius: 10px;
+194	  display: flex;
+195	  align-items: center;
+196	  justify-content: center;
+197	  color: var(--muted);
+198	  flex: none;
+199	}
+200	.rail-btn:hover {
+201	  background: var(--surface-2);
+202	  color: var(--text);
+203	  text-decoration: none;
+204	}
+205	.rail-btn.active {
+206	  background: var(--surface-2);
+207	  color: var(--text);
+208	}
+209	.rail-btn.active::before {
+210	  content: '';
+211	  position: absolute;
+212	  left: -10px;
+213	  top: 8px;
+214	  bottom: 8px;
+215	  width: 3px;
+216	  border-radius: 2px;
+217	  background: var(--accent);
+218	}
+219	.rail-btn[data-tip]:hover::after {
+220	  content: attr(data-tip);
+221	  position: absolute;
+222	  left: calc(100% + 10px);
+223	  top: 50%;
+224	  transform: translateY(-50%);
+225	  background: var(--surface-2);
+226	  border: 1px solid var(--border-hover);
+227	  color: var(--text);
+228	  font-size: 12px;
+229	  font-weight: 500;
+230	  padding: 4px 9px;
+231	  border-radius: 7px;
+232	  white-space: nowrap;
+233	  z-index: 60;
+234	  pointer-events: none;
+235	}
+236	.rail-badge {
+237	  position: absolute;
+238	  top: -3px;
+239	  right: -3px;
+240	  min-width: 16px;
+241	  height: 16px;
+242	  padding: 0 4px;
+243	  border-radius: 999px;
+244	  background: var(--danger);
+245	  color: #fff;
+246	  font-size: 10px;
+247	  font-weight: 600;
+248	  font-family: var(--font-mono);
+249	  display: flex;
+250	  align-items: center;
+251	  justify-content: center;
+252	  border: 2px solid var(--surface);
+253	}
+254	.rail-spacer {
+255	  flex: 1;
+256	}
+257	.rail-signout {
+258	  margin-top: 6px;
+259	}
+260	.rail-signout:hover {
+261	  color: var(--danger);
+262	  background: rgba(255, 82, 82, 0.1);
+263	  border-color: rgba(255, 82, 82, 0.35);
+264	}
+265	.workspace {
+266	  flex: 1;
+267	  min-width: 0;
+268	  display: flex;
+269	  flex-direction: column;
+270	}
+271	.main {
+272	  flex: 1;
+273	  min-height: 0;
+274	  display: flex;
+275	  flex-direction: column;
+276	  overflow: hidden;
+277	}
+278	.topbar {
+279	  background: var(--bg);
+280	  border-bottom: 1px solid var(--border);
+281	  padding: 0 18px;
+282	  height: 54px;
+283	  display: flex;
+284	  align-items: center;
+285	  gap: 14px;
+286	  flex: none;
+287	}
+288	.topbar h1 {
+289	  margin: 0;
+290	  font-size: 15px;
+291	  font-weight: 600;
+292	  letter-spacing: -0.01em;
+293	  flex: none;
+294	}
+295	.gsearch {
+296	  margin-left: auto;
+297	  display: flex;
+298	  align-items: center;
+299	  gap: 8px;
+300	  background: var(--surface-2);
+301	  border: 1px solid var(--border);
+302	  border-radius: var(--radius-pill);
+303	  padding: 6px 12px;
+304	  width: min(320px, 34vw);
+305	  color: var(--faint);
+306	}
+307	.gsearch input {
+308	  border: 0;
+309	  background: transparent;
+310	  color: var(--text);
+311	  font: inherit;
+312	  font-size: 13px;
+313	  width: 100%;
+314	  min-width: 0;
+315	}
+316	.gsearch input:focus {
+317	  outline: none;
+318	}
+319	.gsearch input::placeholder {
+320	  color: var(--faint);
+321	}
+322	.gsearch:focus-within {
+323	  border-color: var(--accent);
+324	}
+325	.tb-actions {
+326	  display: flex;
+327	  align-items: center;
+328	  gap: 6px;
+329	  flex: none;
+330	}
+331	.icon-btn {
+332	  position: relative;
+333	  width: 32px;
+334	  height: 32px;
+335	  border-radius: 8px;
+336	  border: 1px solid transparent;
+337	  background: transparent;
+338	  color: var(--muted);
+339	  display: inline-flex;
+340	  align-items: center;
+341	  justify-content: center;
+342	  cursor: pointer;
+343	  flex: none;
+344	}
+345	.icon-btn:hover {
+346	  background: var(--surface-2);
+347	  color: var(--text);
+348	  text-decoration: none;
+349	}
+350	.icon-btn[data-tip]:hover::after {
+351	  content: attr(data-tip);
+352	  position: absolute;
+353	  top: calc(100% + 8px);
+354	  right: 0;
+355	  background: var(--surface-2);
+356	  border: 1px solid var(--border-hover);
+357	  color: var(--text);
+358	  font-size: 11px;
+359	  font-weight: 500;
+360	  padding: 3px 8px;
+361	  border-radius: 6px;
+362	  white-space: nowrap;
+363	  z-index: 60;
+364	  pointer-events: none;
+365	}
+366	.tb-badge {
+367	  position: absolute;
+368	  top: -2px;
+369	  right: -2px;
+370	  min-width: 16px;
+371	  height: 16px;
+372	  padding: 0 4px;
+373	  border-radius: 999px;
+374	  background: var(--danger);
+375	  color: #fff;
+376	  font-size: 10px;
+377	  font-weight: 600;
+378	  font-family: var(--font-mono);
+379	  display: flex;
+380	  align-items: center;
+381	  justify-content: center;
+382	  border: 2px solid var(--bg);
+383	}
+384	.avatar-wrap {
+385	  position: relative;
+386	}
+387	.avatar-btn {
+388	  width: 32px;
+389	  height: 32px;
+390	  border-radius: 50%;
+391	  border: 1px solid var(--border);
+392	  background: var(--surface-2);
+393	  color: var(--text);
+394	  font-size: 11px;
+395	  font-weight: 600;
+396	  letter-spacing: 0.02em;
+397	  cursor: pointer;
+398	  display: flex;
+399	  align-items: center;
+400	  justify-content: center;
+401	}
+402	.avatar-btn:hover {
+403	  border-color: var(--border-hover);
+404	}
+405	.avatar-menu {
+406	  position: absolute;
+407	  top: calc(100% + 8px);
+408	  right: 0;
+409	  width: 220px;
+410	  background: var(--surface);
+411	  border: 1px solid var(--border-hover);
+412	  border-radius: 12px;
+413	  padding: 12px;
+414	  z-index: 50;
+415	  display: flex;
+416	  flex-direction: column;
+417	  gap: 8px;
+418	  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+419	}

@@ -1,5 +1,5 @@
 # Place at the repo root (next to pnpm-workspace.yaml).
-# ONE env file on the server: ~/app/.env  (same style as your local .env)
+# ONE env file on the server: ~/app/my-chat-app/.env
 
 x-logging: &logging
   driver: json-file
@@ -65,7 +65,7 @@ services:
     logging: *logging
 
   # One-off helper for bootstrap + migrations:
-  #   docker compose run --rm tools <command>
+  #   docker compose run --rm -w /app/packages/db tools node_modules/.bin/tsx src/migrate.ts
   tools:
     <<: *api
     profiles: ["tools"]
@@ -75,20 +75,46 @@ services:
       db:
         condition: service_healthy
 
+  # Dashboard (Next.js). Gets NO secrets: only the public API address.
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_ORIGIN}
+    image: livechat-dashboard
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+    logging: *logging
+
+  # Caddy = HTTPS front door + serves the built site and widget.js
   caddy:
-    image: caddy:2
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        PUBLIC_API_ORIGIN: ${PUBLIC_API_ORIGIN}
+        PUBLIC_SITE_ORIGIN: ${PUBLIC_SITE_ORIGIN}
+        PUBLIC_APP_ORIGIN: ${PUBLIC_APP_ORIGIN}
+    image: livechat-web
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     environment:
       API_DOMAIN: ${API_DOMAIN}
+      APP_DOMAIN: ${APP_DOMAIN}
+      SITE_DOMAIN: ${SITE_DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - api
+      - dashboard
     logging: *logging
 
 volumes:

@@ -2,18 +2,21 @@
 **/node_modules
 **/dist
 **/.next
-.next
+**/.astro
 
-# secrets: never copy into an image
-.env
-.env.*
-!.env.example
-*.env
-!*.env.example
+# secrets: never copy into an image (any folder)
+**/.env
+**/.env.*
+!**/.env.example
+**/*.env
+!**/*.env.example
 
 # junk / logs / local scripts
-*.log
-.tmp-*
+**/*.log
+**/*.zip
+**/.tmp-*
+**/tmp-classes.txt
+**/tsconfig.tsbuildinfo
 tmp
 *.ps1
 info

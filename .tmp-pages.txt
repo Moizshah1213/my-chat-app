@@ -1,0 +1,2325 @@
+﻿===== src\app\(app)\components\icons.tsx
+import type { ReactNode } from 'react';
+
+/** Inline stroke icon set for the dashboard shell (icon rail + toolbars). */
+interface IconProps {
+  size?: number;
+}
+
+function Icon({ size = 18, children }: IconProps & { children: ReactNode }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+export function ChatIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.34 0-2.6-.35-3.7-.96L3 21l1.96-5.3A8.5 8.5 0 1 1 21 11.5Z" />
+    </Icon>
+  );
+}
+export function VisitorsIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  );
+}
+export function KeyIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <circle cx="8" cy="15" r="4.5" />
+      <path d="M11.5 11.5 20 3m-3.5 3.5 3 3m-6 0 2.5 2.5" />
+    </Icon>
+  );
+}
+export function SlidersIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6M9 8h6m2 8h6" />
+    </Icon>
+  );
+}
+export function TeamIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </Icon>
+  );
+}
+export function ShieldIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M12 22s8-4 8-10V5.5L12 2 4 5.5V12c0 6 8 10 8 10Z" />
+      <path d="m9 12 2 2 4-4" />
+    </Icon>
+  );
+}
+export function ActivityIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M22 12h-4l-3 8L9 4l-3 8H2" />
+    </Icon>
+  );
+}
+export function SearchIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <circle cx="11" cy="11" r="7.5" />
+      <path d="m21 21-4.5-4.5" />
+    </Icon>
+  );
+}
+export function ListIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+    </Icon>
+  );
+}
+export function BellIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </Icon>
+  );
+}
+export function ArrowLeftIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M19 12H5m7 7-7-7 7-7" />
+    </Icon>
+  );
+}
+export function RefreshIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M21 4v6h-6M3 20v-6h6" />
+      <path d="M3.5 9a9 9 0 0 1 14.9-3.4L21 8M21 15a9 9 0 0 1-14.9 3.4L3 16" />
+    </Icon>
+  );
+}
+export function ChevronDownIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="m6 9 6 6 6-6" />
+    </Icon>
+  );
+}
+export function SendIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+    </Icon>
+  );
+}
+export function SmileIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="M8 14.5s1.5 2 4 2 4-2 4-2" />
+      <path d="M9 9.5h.01M15 9.5h.01" />
+    </Icon>
+  );
+}
+export function EditIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" />
+    </Icon>
+  );
+}
+export function UserIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </Icon>
+  );
+}
+export function SignOutIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5M21 12H9" />
+    </Icon>
+  );
+}
+
+===== src\app\(app)\components\inbox-list.tsx
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { api, getAccessToken, type Conversation, type ConversationStatus } from '@/lib/api';
+import { connectAgentSocket, type Socket } from '@/lib/socket';
+import { useAuth } from '@/lib/auth';
+import { RefreshIcon, SearchIcon, UserIcon } from './icons';
+
+const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+export function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return RELATIVE.format(-mins, 'minute');
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return RELATIVE.format(-hours, 'hour');
+  return RELATIVE.format(-Math.round(hours / 24), 'day');
+}
+
+/** Avatar initials from a label ("Mary Smith" â†’ "MS", fallback "VI"). */
+function initialsOf(label: string): string {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'VI';
+  return parts
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+interface Props {
+  /** Conversation highlighted as active (detail view). */
+  selectedId?: string;
+}
+
+/** Shared inbox conversation list: search, status/assignee filters, live updates. */
+export default function InboxList({ selectedId }: Props) {
+  const { user } = useAuth();
+  const [items, setItems] = useState<Conversation[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [status, setStatus] = useState<ConversationStatus | ''>('');
+  const [assignee, setAssignee] = useState<'me' | 'unassigned' | 'any'>('any');
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const socketRef = useRef<Socket | null>(null);
+
+  const load = useCallback(
+    async (nextCursor?: string) => {
+      setError('');
+      try {
+        const page = await api.listConversations({
+          ...(status ? { status } : {}),
+          assignee,
+          ...(nextCursor ? { cursor: nextCursor } : {}),
+          limit: 50,
+        });
+        setItems((prev) => (nextCursor ? [...prev, ...page.items] : page.items));
+        setCursor(page.nextCursor);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load conversations');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [status, assignee],
+  );
+
+  useEffect(() => {
+    setLoading(true);
+    void load();
+  }, [load]);
+
+  // Live inbox updates: workspace room events (assign/close/new) â†’ refetch.
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = connectAgentSocket(token, {
+      onConversationUpdated: () => void load(),
+    });
+    socketRef.current = socket;
+    return () => {
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [load]);
+
+  // Global search: initial ?q= from the topbar jump + live "lc-search" events.
+  useEffect(() => {
+    const initial = new URLSearchParams(window.location.search).get('q');
+    if (initial) setQuery(initial);
+    const onSearch = (e: Event) => setQuery(String((e as CustomEvent<string>).detail ?? ''));
+    window.addEventListener('lc-search', onSearch);
+    return () => window.removeEventListener('lc-search', onSearch);
+  }, []);
+
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? items.filter((c) =>
+        `${c.subject ?? ''} ${c.visitor?.name ?? ''} ${c.visitor?.email ?? ''} ${c.visitorId ?? ''}`.toLowerCase().includes(needle),
+      )
+    : items;
+
+  return (
+    <div className="inbox-list">
+      <div className="list-tools">
+        <label className="search-pill">
+          <SearchIcon size={15} />
+          <input
+            placeholder="Search conversations"
+            aria-label="Search conversations"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <select
+          className="pill-select"
+          aria-label="Status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as ConversationStatus | '')}
+        >
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="pending">Pending</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <div className="list-tools sub">
+        <select
+          className="pill-select"
+          aria-label="Assignee"
+          value={assignee}
+          onChange={(e) => setAssignee(e.target.value as typeof assignee)}
+        >
+          <option value="any">Anyone</option>
+          <option value="me">Assigned to me</option>
+          <option value="unassigned">Unassigned</option>
+        </select>
+        <span className="list-count">
+          {visible.length} {visible.length === 1 ? 'conversation' : 'conversations'}
+        </span>
+        <button
+          className="icon-btn"
+          onClick={() => void load()}
+          aria-label="Refresh conversations"
+          data-tip="Refresh"
+        >
+          <RefreshIcon size={15} />
+        </button>
+      </div>
+
+      {error && <div className="alert error" style={{ margin: 12 }}>{error}</div>}
+      {loading && items.length === 0 && <div className="loading">Loadingâ€¦</div>}
+      {!loading && visible.length === 0 && !error && (
+        <div className="empty-state" style={{ padding: 40 }}>
+          {needle ? 'No conversations match your search.' : 'No conversations yet.'}
+        </div>
+      )}
+      {visible.map((c) => {
+        const label =
+          c.subject ??
+          c.visitor?.name ??
+          c.visitor?.email ??
+          `Visitor ${c.visitorId?.slice(0, 8) ?? 'â€”'}`;
+        const assigned = Boolean(c.assignedTo);
+        const mine = Boolean(c.assignedTo) && c.assignedTo === user?.id;
+        return (
+          <Link
+            key={c.id}
+            className={`conv-item${selectedId === c.id ? ' active' : ''}`}
+            href={`/conversations/${c.id}`}
+            aria-current={selectedId === c.id ? 'page' : undefined}
+          >
+            <span className="conv-avatar" aria-hidden="true">
+              {initialsOf(label)}
+            </span>
+            <span className="conv-main">
+              <span className="conv-row">
+                <span className="who">{label}</span>
+                <span className={`badge ${c.status}`}>{c.status}</span>
+              </span>
+              <span className="conv-row sub">
+                <span className="when">{timeAgo(c.lastMessageAt)}</span>
+                <span className={`assignee-chip${assigned ? '' : ' none'}`}>
+                  <UserIcon size={11} />
+                  {mine ? 'You' : assigned ? 'Teammate' : 'Unassigned'}
+                </span>
+              </span>
+            </span>
+          </Link>
+        );
+      })}
+      {cursor && (
+        <div className="pager">
+          <button className="btn secondary small" onClick={() => void load(cursor)}>
+            Load more
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+===== src\app\(app)\conversations\[id]\page.tsx
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import {
+  api,
+  getAccessToken,
+  type Conversation,
+  type ConversationStatus,
+  type Message,
+  type VisitorDetail,
+} from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { connectAgentSocket, joinConversation, type Socket } from '@/lib/socket';
+import InboxList, { timeAgo } from '../../components/inbox-list';
+import {
+  ArrowLeftIcon,
+  ChatIcon,
+  ChevronDownIcon,
+  EditIcon,
+  SendIcon,
+  SmileIcon,
+  UserIcon,
+} from '../../components/icons';
+
+const TIME = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' });
+const EMOJIS = ['\uD83D\uDC4D', '\uD83C\uDF89', '\uD83D\uDE04', '\uD83D\uDE4F', '\u2705', '\uD83D\uDD25', '\u2764\uFE0F', '\uD83D\uDE05'];
+
+function whenLabel(iso: string): string {
+  const d = new Date(iso);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  const day = sameDay
+    ? 'Today'
+    : d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  return `${day} ${TIME.format(d)}`;
+}
+
+/** Conversation detail: inbox list + thread (channel tabs, bubbles, composer)
+ *  + right-hand contact panel (status, visitor details, sections, actions). */
+export default function ConversationDetailPage() {
+  const params = useParams<{ id: string }>();
+  const conversationId = params.id;
+  const { user } = useAuth();
+
+  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [visitor, setVisitor] = useState<VisitorDetail | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [draft, setDraft] = useState('');
+  const [subject, setSubject] = useState('');
+  const [error, setError] = useState('');
+  const [typing, setTyping] = useState(false);
+  const [online, setOnline] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+
+  const seenIds = useRef(new Set<string>());
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const appendMessage = useCallback((msg: Message) => {
+    if (seenIds.current.has(msg.id)) return;
+    seenIds.current.add(msg.id);
+    setMessages((prev) => [...prev, msg]);
+  }, []);
+
+  // Load conversation + first page of history.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [conv, page] = await Promise.all([
+          api.getConversation(conversationId),
+          api.listMessages(conversationId),
+        ]);
+        if (cancelled) return;
+        setConversation(conv);
+        setSubject(conv.subject ?? '');
+        for (const m of page.items) seenIds.current.add(m.id);
+        setMessages(page.items);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId]);
+
+  // Contact panel: resolve the visitor behind this conversation.
+  useEffect(() => {
+    const id = conversation?.visitorId;
+    if (!id) return;
+    let cancelled = false;
+    api
+      .getVisitor(id)
+      .then((v) => {
+        if (!cancelled) setVisitor(v);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation?.visitorId]);
+
+  // Realtime: visitor messages, typing, presence, conversation updates.
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = connectAgentSocket(token, {
+      onMessage: (payload) => {
+        const msg = payload as Message & { conversationId: string };
+        if (msg.conversationId === conversationId) appendMessage(msg);
+      },
+      onTyping: (payload) => {
+        const p = payload as { conversationId: string; typing: boolean };
+        if (p.conversationId !== conversationId) return;
+        setTyping(p.typing);
+        if (typingTimer.current) clearTimeout(typingTimer.current);
+        typingTimer.current = setTimeout(() => setTyping(false), 3000);
+      },
+      onVisitorPresence: (payload) => {
+        const p = payload as { visitorId: string; online: boolean };
+        if (p.visitorId === conversation?.visitorId) setOnline(p.online);
+      },
+      onConversationUpdated: (payload) => {
+        const p = payload as { conversationId?: string };
+        if (p.conversationId === conversationId) {
+          void api
+            .getConversation(conversationId)
+            .then(setConversation)
+            .catch(() => undefined);
+        }
+      },
+    });
+    socketRef.current = socket;
+    if (conversation) joinConversation(socket, conversationId);
+    return () => {
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [conversationId, conversation, appendMessage]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages.length, typing]);
+
+  async function onSend(e: React.FormEvent) {
+    e.preventDefault();
+    const body = draft.trim();
+    if (!body) return;
+    setDraft('');
+    try {
+      appendMessage(await api.sendMessage(conversationId, body));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Send failed');
+    }
+  }
+
+  async function assignToMe() {
+    if (!user) return;
+    try {
+      setConversation(await api.updateConversation(conversationId, { assignedTo: user.id }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Assign failed');
+    }
+  }
+
+  async function setStatus(status: ConversationStatus) {
+    try {
+      setConversation(await api.updateConversation(conversationId, { status }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Update failed');
+    }
+  }
+
+  /** Subject is editable here (PATCH /conversations/:id). */
+  async function saveSubject() {
+    if (!conversation) return;
+    const next = subject.trim();
+    if (next === (conversation.subject ?? '')) return;
+    try {
+      setConversation(await api.updateConversation(conversationId, { subject: next || null }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Subject update failed');
+      setSubject(conversation.subject ?? '');
+    }
+  }
+
+  function insertEmoji(e: string) {
+    setEmojiOpen(false);
+    setDraft((d) => d + e);
+    composerRef.current?.focus();
+  }
+
+  const displayName =
+    visitor?.name ??
+    (conversation?.visitorId ? `Visitor ${conversation.visitorId.slice(0, 8)}` : 'Visitor');
+  const [first = '', ...restParts] = displayName.split(' ');
+  const last = restParts.join(' ') || '—';
+  const metaEntries = Object.entries(visitor?.meta ?? {});
+
+  return (
+    <div className="inbox with-contact">
+      <InboxList selectedId={conversationId} />
+
+      <div className="inbox-detail thread">
+        <div className="thread-head">
+          <Link
+            href="/conversations"
+            className="icon-btn"
+            aria-label="Back to inbox"
+            data-tip="Back to inbox"
+          >
+            <ArrowLeftIcon size={17} />
+          </Link>
+          <span
+            className={`status-dot${online ? ' online' : ''}`}
+            title={online ? 'Visitor online' : 'Visitor offline'}
+          />
+          <span className="title">{conversation?.subject ?? displayName}</span>
+          {conversation && (
+            <span className={`badge ${conversation.status}`}>{conversation.status}</span>
+          )}
+        </div>
+
+        <div className="tabs" role="tablist" aria-label="Channels">
+          <button className="tab active" type="button" role="tab" aria-selected="true">
+            All
+          </button>
+          <button
+            className="tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            disabled
+            title="Channel not connected"
+          >
+            SMS
+          </button>
+          <button
+            className="tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            disabled
+            title="Channel not connected"
+          >
+            Email
+          </button>
+          <button
+            className="tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            disabled
+            title="Channel not connected"
+          >
+            Messenger
+          </button>
+        </div>
+
+        {error && (
+          <div className="alert error" style={{ margin: 12 }}>
+            {error}
+          </div>
+        )}
+
+        <div className="chat-messages">
+          {messages.map((m) => (
+            <div key={m.id} className={`msg ${m.senderType}`}>
+              <span className="msg-meta">
+                <span className="sender">
+                  {m.senderType === 'agent' ? user?.name || 'You' : displayName}
+                </span>
+                <ChatIcon size={12} />
+                <span className="when">{whenLabel(m.createdAt)}</span>
+              </span>
+              <span className="body">{m.body}</span>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="typing-line">{typing ? 'Visitor is typing…' : ''}</div>
+
+        <form className="chat-composer" onSubmit={onSend}>
+          <input
+            className="subject-input"
+            placeholder="Subject"
+            aria-label="Subject"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            onBlur={() => void saveSubject()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void saveSubject();
+              }
+            }}
+          />
+          <div className="composer-row">
+            <div className="emoji-wrap">
+              <button
+                className="icon-btn"
+                type="button"
+                aria-label="Insert emoji"
+                aria-expanded={emojiOpen}
+                onClick={() => setEmojiOpen((o) => !o)}
+              >
+                <SmileIcon size={17} />
+              </button>
+              {emojiOpen && (
+                <div className="emoji-pop">
+                  {EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      aria-label="Insert emoji"
+                      onClick={() => insertEmoji(e)}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <textarea
+              ref={composerRef}
+              rows={1}
+              placeholder={
+                conversation?.status === 'closed' ? 'Conversation is closed' : 'Enter text'
+              }
+              aria-label="Reply"
+              value={draft}
+              disabled={conversation?.status === 'closed'}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
+            <button
+              className="btn"
+              type="submit"
+              disabled={conversation?.status === 'closed' || !draft.trim()}
+            >
+              <SendIcon size={15} />
+              Send
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <aside className="contact" aria-label="Contact details">
+        <div className="contact-head">
+          <label className="contact-status">
+            <UserIcon size={14} />
+            <select
+              aria-label="Conversation status"
+              value={conversation?.status ?? 'open'}
+              disabled={!conversation}
+              onChange={(e) => void setStatus(e.target.value as ConversationStatus)}
+            >
+              <option value="open">Open</option>
+              <option value="pending">Pending</option>
+              <option value="closed">Closed</option>
+            </select>
+            <ChevronDownIcon size={13} />
+          </label>
+        </div>
+
+        <div className="contact-body">
+          <div className="contact-title">
+            <h3>Contact Details</h3>
+            <Link
+              className="link-edit"
+              href={
+                conversation?.visitorId ? `/visitors/${conversation.visitorId}` : '/visitors'
+              }
+            >
+              <EditIcon size={13} />
+              EDIT
+            </Link>
+          </div>
+          <dl className="detail-rows">
+            <div className="detail-row">
+              <dt>First Name</dt>
+              <dd>{first || '—'}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Last Name</dt>
+              <dd>{last}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Email</dt>
+              <dd>{visitor?.email ?? '—'}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Visitor ID</dt>
+              <dd className="mono">{conversation?.visitorId?.slice(0, 12) ?? '—'}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Status</dt>
+              <dd>
+                {conversation && (
+                  <span className={`badge ${conversation.status}`}>{conversation.status}</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <details className="collapse">
+            <summary>
+              Attributes <span className="count-pill">{metaEntries.length}</span>
+              <ChevronDownIcon size={14} />
+            </summary>
+            {metaEntries.length === 0 ? (
+              <div className="muted small">No attributes captured.</div>
+            ) : (
+              <dl className="detail-rows">
+                {metaEntries.map(([k, v]) => (
+                  <div className="detail-row" key={k}>
+                    <dt>{k}</dt>
+                    <dd>{typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '—')}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </details>
+
+          <details className="collapse">
+            <summary>
+              Conversations <span className="count-pill">{visitor?.conversations.length ?? 0}</span>
+              <ChevronDownIcon size={14} />
+            </summary>
+            {!visitor && <div className="muted small">Loading…</div>}
+            {visitor && visitor.conversations.length === 0 && (
+              <div className="muted small">No other conversations.</div>
+            )}
+            {(visitor?.conversations ?? []).map((c) => (
+              <Link
+                key={c.id}
+                className={`conv-mini${c.id === conversationId ? ' current' : ''}`}
+                href={`/conversations/${c.id}`}
+              >
+                <span className="who">{c.subject ?? 'Conversation'}</span>
+                <span className={`badge ${c.status}`}>{c.status}</span>
+                <span className="when">{timeAgo(c.lastMessageAt)}</span>
+              </Link>
+            ))}
+          </details>
+
+          <details className="collapse">
+            <summary>
+              Session
+              <ChevronDownIcon size={14} />
+            </summary>
+            <dl className="detail-rows">
+              <div className="detail-row">
+                <dt>First seen</dt>
+                <dd>{visitor ? new Date(visitor.firstSeen).toLocaleString() : '—'}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>Last seen</dt>
+                <dd>{visitor ? timeAgo(visitor.lastSeen) : '—'}</dd>
+              </div>
+              <div className="detail-row">
+                <dt>Socket</dt>
+                <dd>{online ? 'online' : 'offline'}</dd>
+              </div>
+            </dl>
+          </details>
+        </div>
+
+        <div className="contact-actions">
+          {conversation && conversation.status !== 'closed' && !conversation.assignedTo && (
+            <button className="btn" onClick={() => void assignToMe()}>
+              Assign to me
+            </button>
+          )}
+          {conversation && conversation.status !== 'closed' && (
+            <button className="btn danger" onClick={() => void setStatus('closed')}>
+              Close conversation
+            </button>
+          )}
+          {conversation?.status === 'closed' && (
+            <button className="btn" onClick={() => void setStatus('open')}>
+              Reopen conversation
+            </button>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+===== src\app\(app)\conversations\page.tsx
+import InboxList from '../components/inbox-list';
+
+/** Agent inbox: conversation list (search/status/assignee filters, live updates)
+ *  beside an empty-thread placeholder until a conversation is picked. */
+export default function ConversationsPage() {
+  return (
+    <div className="inbox">
+      <InboxList />
+      <div className="inbox-detail">
+        <div className="empty-state">Select a conversation to start replying.</div>
+      </div>
+    </div>
+  );
+}
+
+===== src\app\(app)\settings\activity\page.tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { api, type AuditEntry } from '@/lib/api';
+
+const WHEN = new Intl.DateTimeFormat('en', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Recent privileged activity for the workspace (owner/admin). */
+export default function ActivityPage() {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      setEntries(await api.listAuditLogs(100));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load activity');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <>
+      <div className="content">
+        {error && <div className="alert error">{error}</div>}
+        <div className="card">
+          <h2>Recent activity</h2>
+          {loading && <div className="muted">Loadingâ€¦</div>}
+          {!loading && entries.length === 0 && !error && (
+            <div className="muted">No activity recorded yet.</div>
+          )}
+          {entries.length > 0 && (
+            <table className="list">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Action</th>
+                  <th>Actor</th>
+                  <th>Target</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e) => (
+                  <tr key={e.id}>
+                    <td className="muted">{WHEN.format(new Date(e.createdAt))}</td>
+                    <td className="mono">{e.action}</td>
+                    <td className="mono">{e.actorId ? `${e.actorId.slice(0, 8)}â€¦` : 'â€”'}</td>
+                    <td className="mono">{e.target ? `${e.target.slice(0, 12)}â€¦` : 'â€”'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+===== src\app\(app)\settings\api-keys\page.tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { api, type ApiKeyView } from '@/lib/api';
+
+/** API keys: mint (key shown once), list, revoke. */
+export default function ApiKeysPage() {
+  const [keys, setKeys] = useState<ApiKeyView[]>([]);
+  const [name, setName] = useState('');
+  const [newKey, setNewKey] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [verifying, setVerifying] = useState<string | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{
+    keyName: string;
+    ok: boolean;
+    detail: string;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setKeys(await api.listApiKeys());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load keys');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setError('');
+    setBusy(true);
+    try {
+      const key = await api.createApiKey(name.trim());
+      setNewKey(key.publicKey);
+      setName('');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create key');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRevoke(id: string) {
+    setError('');
+    try {
+      await api.revokeApiKey(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke');
+    }
+  }
+
+  /** "Verify installation" â€” resolve the public settings endpoint like a real widget. */
+  async function onVerify(key: ApiKeyView) {
+    setError('');
+    setVerifying(key.id);
+    setVerifyResult(null);
+    try {
+      const result = await api.checkWidgetKey(key.publicKey);
+      setVerifyResult({ keyName: key.name, ok: result.ok, detail: result.detail });
+    } catch (err) {
+      setVerifyResult({
+        keyName: key.name,
+        ok: false,
+        detail: err instanceof Error ? err.message : 'Check failed',
+      });
+    } finally {
+      setVerifying(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="content">
+        {error && <div className="alert error">{error}</div>}
+        {newKey && (
+          <div className="alert success">
+            <strong>Key created â€” copy it now:</strong>
+            <div className="mono" style={{ marginTop: 6, wordBreak: 'break-all' }}>
+              {newKey}
+            </div>
+            <button className="btn secondary small" style={{ marginTop: 8 }} onClick={() => setNewKey('')}>
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        <div className="card">
+          <h2>Mint a widget key</h2>
+          <form onSubmit={onCreate} style={{ display: 'flex', gap: 10 }}>
+            <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+              <input
+                placeholder="e.g. Marketing site"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <button className="btn" type="submit" disabled={busy}>
+              {busy ? 'Creatingâ€¦' : 'Create key'}
+            </button>
+          </form>
+          <p className="muted" style={{ marginBottom: 0, marginTop: 10 }}>
+            The key ships in your website&apos;s embed snippet. Revoking it instantly disables the
+            widget on every site using it.
+          </p>
+        </div>
+
+        <div className="card">
+          <h2>Keys</h2>
+          <table className="list">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Key</th>
+                <th>Status</th>
+                <th>Last used</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map((k) => (
+                <tr key={k.id}>
+                  <td>{k.name}</td>
+                  <td className="mono">{k.publicKey.slice(0, 22)}â€¦</td>
+                  <td>
+                    {k.revokedAt ? (
+                      <span className="badge revoked">revoked</span>
+                    ) : (
+                      <span className="badge open">active</span>
+                    )}
+                  </td>
+                  <td className="muted">
+                    {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : 'never'}
+                  </td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button
+                      className="btn secondary small"
+                      style={{ marginRight: 8 }}
+                      disabled={verifying === k.id}
+                      onClick={() => void onVerify(k)}
+                    >
+                      {verifying === k.id ? 'Checkingâ€¦' : 'Verify'}
+                    </button>
+                    {!k.revokedAt && (
+                      <button className="btn danger small" onClick={() => void onRevoke(k.id)}>
+                        Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {keys.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    No keys yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {verifyResult && (
+            <div
+              className={`alert ${verifyResult.ok ? 'success' : 'error'}`}
+              style={{ marginTop: 12, marginBottom: 0 }}
+            >
+              <strong>
+                {verifyResult.ok ? 'âœ“ Looks good' : 'âš  Not ready'} â€” {verifyResult.keyName}:
+              </strong>{' '}
+              {verifyResult.detail}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <h2>Embed snippet</h2>
+          <p className="muted">Paste this on every page, just before &lt;/body&gt;:</p>
+          <pre
+            className="mono"
+            style={{ background: 'var(--surface-2)', color: 'var(--text)', padding: 14, borderRadius: 9, border: '1px solid var(--border)', overflowX: 'auto' }}
+          >
+{`<script src="${process.env.NEXT_PUBLIC_WIDGET_URL ?? 'https://cdn.example.com'}/widget.js"
+        data-public-key="pk_â€¦"
+        data-api-url="${process.env.NEXT_PUBLIC_API_URL ?? 'https://api.example.com'}"
+        async></script>`}
+          </pre>
+        </div>
+      </div>
+    </>
+  );
+}
+
+===== src\app\(app)\settings\members\page.tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { api, type Member, type Role } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+
+/** Team management: members list, invite (token shown once), roles, removal. */
+export default function MembersPage() {
+  const { user, role: myRole } = useAuth();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [email, setEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<Role>('agent');
+  const [inviteToken, setInviteToken] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setMembers(await api.listMembers());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load members');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const canManage = myRole === 'owner' || myRole === 'admin';
+
+  async function onInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setError('');
+    setBusy(true);
+    try {
+      const res = await api.invite(email.trim(), inviteRole);
+      setInviteToken(res.token);
+      setEmail('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to invite');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onChangeRole(userId: string, role: Role) {
+    setError('');
+    try {
+      await api.updateRole(userId, role);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to change role');
+    }
+  }
+
+  async function onRemove(userId: string) {
+    setError('');
+    try {
+      await api.removeMember(userId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove member');
+    }
+  }
+
+  return (
+    <>
+      <div className="content">
+        {error && <div className="alert error">{error}</div>}
+        {inviteToken && (
+          <div className="alert success">
+            <strong>Invitation created â€” share this link (dev stand-in for email):</strong>
+            <div className="mono" style={{ marginTop: 6, wordBreak: 'break-all' }}>
+              {inviteToken}
+            </div>
+            <button
+              className="btn secondary small"
+              style={{ marginTop: 8 }}
+              onClick={() => setInviteToken('')}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {canManage && (
+          <div className="card">
+            <h2>Invite a teammate</h2>
+            <form onSubmit={onInvite} style={{ display: 'flex', gap: 10 }}>
+              <div className="field" style={{ flex: 2, marginBottom: 0 }}>
+                <input
+                  type="email"
+                  placeholder="teammate@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as Role)}
+                  aria-label="Role"
+                >
+                  <option value="agent">Agent</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <button className="btn" type="submit" disabled={busy}>
+                {busy ? 'Invitingâ€¦' : 'Send invite'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        <div className="card">
+          <h2>Members</h2>
+          <table className="list">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Joined</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((m) => {
+                const isOwner = m.role === 'owner';
+                const isMe = m.userId === user?.id;
+                return (
+                  <tr key={m.userId}>
+                    <td className="mono">
+                      {m.userId.slice(0, 13)}â€¦ {isMe && <span className="muted">(you)</span>}
+                    </td>
+                    <td>
+                      {canManage && !isOwner ? (
+                        <select
+                          value={m.role}
+                          onChange={(e) => void onChangeRole(m.userId, e.target.value as Role)}
+                          aria-label={`Role for ${m.userId}`}
+                          style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)' }}
+                        >
+                          <option value="agent">agent</option>
+                          <option value="admin">admin</option>
+                          <option value="owner">owner</option>
+                        </select>
+                      ) : (
+                        <span className={`badge ${isOwner ? 'closed' : 'open'}`}>{m.role}</span>
+                      )}
+                    </td>
+                    <td className="muted">{new Date(m.createdAt).toLocaleDateString()}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {canManage && !isOwner && !isMe && (
+                        <button className="btn danger small" onClick={() => void onRemove(m.userId)}>
+                          Remove
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {members.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    No members.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <p className="muted" style={{ marginTop: 12, marginBottom: 0 }}>
+            Only owners can change roles. Role changes take effect on the member&apos;s next token
+            refresh.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+===== src\app\(app)\settings\security\page.tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { api, type LoginSession } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+
+/**
+ * Security settings (blueprint Â§7.1/Â§12): TOTP 2FA enrollment with recovery
+ * codes, and session management ("log out everywhere").
+ */
+export default function SecurityPage() {
+  const { user } = useAuth();
+  const [enabled, setEnabled] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // 2FA setup flow
+  const [pending, setPending] = useState<{ secret: string; otpauthUrl: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [recovery, setRecovery] = useState<string[] | null>(null);
+
+  // 2FA disable flow
+  const [pw, setPw] = useState('');
+  const [dcode, setDcode] = useState('');
+
+  // sessions
+  const [sessions, setSessions] = useState<LoginSession[]>([]);
+
+  useEffect(() => {
+    setEnabled(Boolean(user?.totpEnabled));
+  }, [user?.totpEnabled]);
+
+  const loadSessions = useCallback(async () => {
+    try {
+      setSessions(await api.listSessions());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sessions');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
+
+  async function onStartSetup() {
+    setError('');
+    setBusy(true);
+    try {
+      setPending(await api.setup2fa());
+      setCode('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '2FA setup failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setError('');
+    setBusy(true);
+    try {
+      const result = await api.enable2fa(code.trim());
+      setRecovery(result.recoveryCodes);
+      setPending(null);
+      setCode('');
+      setEnabled(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid code');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDisable(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pw || !dcode.trim()) return;
+    setError('');
+    setBusy(true);
+    try {
+      await api.disable2fa(pw, dcode.trim());
+      setEnabled(false);
+      setPw('');
+      setDcode('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to disable 2FA');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRevoke(id: string) {
+    setError('');
+    try {
+      await api.revokeSession(id);
+      await loadSessions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke session');
+    }
+  }
+
+  async function onLogoutAll() {
+    setError('');
+    try {
+      await api.logoutAll();
+      await loadSessions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to log out other sessions');
+    }
+  }
+
+  return (
+    <>
+      <div className="content">
+        {error && <div className="alert error">{error}</div>}
+
+        <div className="card">
+          <h2>Two-factor authentication</h2>
+          {recovery ? (
+            <div className="alert success">
+              <strong>2FA enabled. Recovery codes â€” copy them now, shown once:</strong>
+              <div
+                className="mono"
+                style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}
+              >
+                {recovery.map((c) => (
+                  <span key={c}>{c}</span>
+                ))}
+              </div>
+              <button
+                className="btn secondary small"
+                style={{ marginTop: 8 }}
+                onClick={() => setRecovery(null)}
+              >
+                I saved them
+              </button>
+            </div>
+          ) : enabled ? (
+            <>
+              <p>
+                <span className="badge open">enabled</span> â€” authenticator codes are required at
+                sign-in.
+              </p>
+              <form onSubmit={onDisable}>
+                <div className="form-row">
+                  <div className="field">
+                    <label htmlFor="pw">Password</label>
+                    <input
+                      id="pw"
+                      type="password"
+                      autoComplete="current-password"
+                      value={pw}
+                      onChange={(e) => setPw(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="dcode">Authenticator or recovery code</label>
+                    <input
+                      id="dcode"
+                      placeholder="123456 or xxxxx-xxxxx"
+                      value={dcode}
+                      onChange={(e) => setDcode(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <button className="btn danger" type="submit" disabled={busy}>
+                  {busy ? 'Disablingâ€¦' : 'Disable 2FA'}
+                </button>
+              </form>
+            </>
+          ) : pending ? (
+            <>
+              <p className="muted">
+                Add this secret to your authenticator app, then confirm with the 6-digit code it
+                shows:
+              </p>
+              <div
+                className="mono"
+                style={{
+                  background: '#0f172a',
+                  color: '#e2e8f0',
+                  padding: 12,
+                  borderRadius: 8,
+                  wordBreak: 'break-all',
+                }}
+              >
+                {pending.otpauthUrl}
+              </div>
+              <div className="mono muted" style={{ marginTop: 6, wordBreak: 'break-all' }}>
+                Secret: {pending.secret}
+              </div>
+              <form onSubmit={onVerify} style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+                <div className="field" style={{ marginBottom: 0, width: 180 }}>
+                  <input
+                    aria-label="6-digit code"
+                    placeholder="123456"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    required
+                  />
+                </div>
+                <button className="btn" type="submit" disabled={busy}>
+                  {busy ? 'Verifyingâ€¦' : 'Verify & enable'}
+                </button>
+                <button className="btn secondary" type="button" onClick={() => setPending(null)}>
+                  Cancel
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="muted">
+                Require a 6-digit authenticator code at sign-in, with one-time recovery codes as a
+                backup.
+              </p>
+              <button className="btn" onClick={() => void onStartSetup()} disabled={busy}>
+                {busy ? 'Preparingâ€¦' : 'Set up 2FA'}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0 }}>Sessions</h2>
+            <button className="btn secondary small" onClick={() => void onLogoutAll()}>
+              Log out other sessions
+            </button>
+          </div>
+          <p className="muted">Every signed-in device for your account.</p>
+          <table className="list">
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>IP</th>
+                <th>Signed in</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    {(s.userAgent ?? 'Unknown device').slice(0, 70)}
+                    {s.current && (
+                      <span className="badge open" style={{ marginLeft: 8 }}>
+                        this device
+                      </span>
+                    )}
+                  </td>
+                  <td className="mono muted">{s.ip ?? 'â€”'}</td>
+                  <td className="muted">{new Date(s.createdAt).toLocaleString()}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {!s.current && (
+                      <button className="btn danger small" onClick={() => void onRevoke(s.id)}>
+                        Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {sessions.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    No active sessions found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+===== src\app\(app)\settings\widget\page.tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { api, type WidgetSettingsView } from '@/lib/api';
+
+const EMPTY: WidgetSettingsView = {
+  color: '#4f46e5',
+  logoUrl: null,
+  position: 'right',
+  greeting: null,
+  offlineMessage: null,
+  prechatFields: [],
+  workingHours: {},
+  aiEnabled: false,
+  aiInstructions: null,
+  allowedDomains: [],
+  language: 'en',
+};
+
+/** Widget customization: appearance, copy, and the site allowlist. */
+export default function WidgetSettingsPage() {
+  const [form, setForm] = useState<WidgetSettingsView>(EMPTY);
+  const [domains, setDomains] = useState('');
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const s = await api.getWidgetSettings();
+      setForm(s);
+      setDomains(s.allowedDomains.join('\n'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load settings');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const set = <K extends keyof WidgetSettingsView>(key: K, value: WidgetSettingsView[K]) =>
+    setForm((f) => ({ ...f, [key]: value }));
+
+  async function onSave(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSaved(false);
+    setBusy(true);
+    try {
+      const updated = await api.updateWidgetSettings({
+        color: form.color,
+        position: form.position,
+        greeting: form.greeting || null,
+        offlineMessage: form.offlineMessage || null,
+        logoUrl: form.logoUrl || null,
+        language: form.language,
+        allowedDomains: domains
+          .split('\n')
+          .map((d) => d.trim())
+          .filter(Boolean),
+      });
+      setForm(updated);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="content">
+        {error && <div className="alert error">{error}</div>}
+        {saved && <div className="alert success">Settings saved.</div>}
+        <form className="card" onSubmit={onSave}>
+          <h2>Appearance</h2>
+          <div className="form-row">
+            <div className="field">
+              <label htmlFor="color">Brand color</label>
+              <input
+                id="color"
+                type="color"
+                value={form.color}
+                onChange={(e) => set('color', e.target.value)}
+                style={{ height: 38, padding: 3 }}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="position">Position</label>
+              <select
+                id="position"
+                value={form.position}
+                onChange={(e) => set('position', e.target.value as 'left' | 'right')}
+              >
+                <option value="right">Bottom right</option>
+                <option value="left">Bottom left</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="language">Language</label>
+              <input
+                id="language"
+                maxLength={10}
+                value={form.language}
+                onChange={(e) => set('language', e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="logo">Logo URL</label>
+            <input
+              id="logo"
+              placeholder="https://â€¦/logo.png"
+              value={form.logoUrl ?? ''}
+              onChange={(e) => set('logoUrl', e.target.value || null)}
+            />
+          </div>
+
+          <h2 style={{ marginTop: 20 }}>Copy</h2>
+          <div className="field">
+            <label htmlFor="greeting">Greeting (chat header title)</label>
+            <input
+              id="greeting"
+              maxLength={500}
+              placeholder="Chat with us"
+              value={form.greeting ?? ''}
+              onChange={(e) => set('greeting', e.target.value || null)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="offline">Offline message</label>
+            <input
+              id="offline"
+              maxLength={500}
+              placeholder="We're away â€” leave a message!"
+              value={form.offlineMessage ?? ''}
+              onChange={(e) => set('offlineMessage', e.target.value || null)}
+            />
+          </div>
+
+          <h2 style={{ marginTop: 20 }}>Security</h2>
+          <div className="field">
+            <label htmlFor="domains">Allowed domains (one per line, <code>*.example.com</code> supported)</label>
+            <textarea
+              id="domains"
+              rows={4}
+              placeholder={'example.com\n*.staging.example.com'}
+              value={domains}
+              onChange={(e) => setDomains(e.target.value)}
+            />
+          </div>
+          <p className="muted">
+            When set, the widget only loads on these origins. Leave empty to allow anywhere.
+          </p>
+
+          <button className="btn" type="submit" disabled={busy} style={{ marginTop: 8 }}>
+            {busy ? 'Savingâ€¦' : 'Save settings'}
+          </button>
+        </form>
+
+        <div className="card">
+          <h2>Live preview</h2>
+          <div
+            style={{
+              position: 'relative',
+              height: 280,
+              background: '#f1f5f9',
+              borderRadius: 10,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 76,
+                ...(form.position === 'left' ? { left: 16 } : { right: 16 }),
+                width: 250,
+                background: '#fff',
+                borderRadius: 12,
+                boxShadow: '0 10px 34px rgba(15,23,42,.22)',
+                overflow: 'hidden',
+                fontSize: 13,
+              }}
+            >
+              <div
+                style={{
+                  background: form.color,
+                  color: '#fff',
+                  padding: '10px 12px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>{form.greeting ?? 'Chat with us'}</span>
+                <span aria-hidden>Ã—</span>
+              </div>
+              <div style={{ padding: 12, minHeight: 96, color: '#475569' }}>
+                {form.offlineMessage && (
+                  <div
+                    style={{
+                      background: '#fef3c7',
+                      color: '#92400e',
+                      padding: '6px 8px',
+                      borderRadius: 8,
+                    }}
+                  >
+                    {form.offlineMessage}
+                  </div>
+                )}
+                <div
+                  style={{
+                    background: '#eef2ff',
+                    padding: '8px 10px',
+                    borderRadius: '10px 10px 10px 2px',
+                    marginTop: 8,
+                  }}
+                >
+                  Hi! How can we help today?
+                </div>
+              </div>
+              <div style={{ borderTop: '1px solid #e2e8f0', padding: '8px 12px', color: '#94a3b8' }}>
+                Type a messageâ€¦
+              </div>
+            </div>
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 16,
+                ...(form.position === 'left' ? { left: 16 } : { right: 16 }),
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                background: form.color,
+                color: '#fff',
+                display: 'grid',
+                placeItems: 'center',
+                boxShadow: '0 8px 18px rgba(15,23,42,.3)',
+                fontSize: 20,
+              }}
+              aria-hidden
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
+            </div>
+          </div>
+          <p className="muted" style={{ marginBottom: 0, marginTop: 10 }}>
+            Preview updates live as you edit â€” save to apply it to the real widget.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+===== src\app\(app)\visitors\[id]\page.tsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { api, type VisitorDetail } from '@/lib/api';
+
+const WHEN = new Intl.DateTimeFormat('en', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Visitor detail (blueprint Â§12): profile, attributes, their conversations. */
+export default function VisitorDetailPage() {
+  const params = useParams<{ id: string }>();
+  const visitorId = params.id;
+  const [visitor, setVisitor] = useState<VisitorDetail | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const v = await api.getVisitor(visitorId);
+        if (!cancelled) setVisitor(v);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load visitor');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visitorId]);
+
+  const attrs = Object.entries(visitor?.meta ?? {});
+
+  return (
+    <>
+      <div className="content">
+        <div className="back-row">
+          <Link href="/visitors" className="btn secondary small">
+            â† Visitors
+          </Link>
+          <span className="back-title">{visitor?.name ?? `Visitor ${visitorId.slice(0, 8)}`}</span>
+        </div>
+        {error && <div className="alert error">{error}</div>}
+        {visitor && (
+          <>
+            <div className="card">
+              <h2>Profile</h2>
+              <table className="list">
+                <tbody>
+                  <tr>
+                    <td className="muted">Email</td>
+                    <td>{visitor.email ?? 'â€”'}</td>
+                  </tr>
+                  <tr>
+                    <td className="muted">First seen</td>
+                    <td>{WHEN.format(new Date(visitor.firstSeen))}</td>
+                  </tr>
+                  <tr>
+                    <td className="muted">Last seen</td>
+                    <td>{WHEN.format(new Date(visitor.lastSeen))}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <h2 style={{ marginTop: 16 }}>Attributes</h2>
+              {attrs.length === 0 ? (
+                <p className="muted" style={{ marginBottom: 0 }}>
+                  No attributes â€” set them from your site with{' '}
+                  <code>{'LiveChat.setAttributes({...})'}</code>.
+                </p>
+              ) : (
+                <table className="list">
+                  <tbody>
+                    {attrs.map(([k, v]) => (
+                      <tr key={k}>
+                        <td className="muted">{k}</td>
+                        <td className="mono">{String(v)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="card">
+              <h2>Conversations</h2>
+              {visitor.conversations.length === 0 ? (
+                <p className="muted" style={{ marginBottom: 0 }}>
+                  No conversations yet.
+                </p>
+              ) : (
+                <table className="list">
+                  <thead>
+                    <tr>
+                      <th>Subject</th>
+                      <th>Status</th>
+                      <th>Last message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visitor.conversations.map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          <Link href={`/conversations/${c.id}`}>
+                            {c.subject ?? `Conversation ${c.id.slice(0, 8)}`}
+                          </Link>
+                        </td>
+                        <td>
+                          <span className={`badge ${c.status}`}>{c.status}</span>
+                        </td>
+                        <td className="muted">{WHEN.format(new Date(c.lastMessageAt))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+===== src\app\(app)\visitors\page.tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { api, type VisitorSummary } from '@/lib/api';
+
+const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return RELATIVE.format(-mins, 'minute');
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return RELATIVE.format(-hours, 'hour');
+  return RELATIVE.format(-Math.round(hours / 24), 'day');
+}
+
+/** Visitors list (blueprint Â§12): who has chatted, with their attributes. */
+export default function VisitorsPage() {
+  const [items, setItems] = useState<VisitorSummary[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      setItems(await api.listVisitors());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load visitors');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <>
+      <div className="content">
+        {error && <div className="alert error">{error}</div>}
+        {loading && items.length === 0 && <div className="loading">Loadingâ€¦</div>}
+        {!loading && items.length === 0 && !error && (
+          <div className="empty-state">No visitors yet â€” they appear after first widget chat.</div>
+        )}
+        {items.length > 0 && (
+          <div className="card">
+            <table className="list">
+              <thead>
+                <tr>
+                  <th>Visitor</th>
+                  <th>Email</th>
+                  <th>Attributes</th>
+                  <th>Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((v) => {
+                  const attrCount = Object.keys(v.meta ?? {}).length;
+                  return (
+                    <tr key={v.id}>
+                      <td>
+                        <Link href={`/visitors/${v.id}`}>
+                          {v.name ?? `Visitor ${v.id.slice(0, 8)}`}
+                        </Link>
+                      </td>
+                      <td className="muted">{v.email ?? 'â€”'}</td>
+                      <td className="muted">{attrCount > 0 ? `${attrCount} set` : 'â€”'}</td>
+                      <td className="muted">{timeAgo(v.lastSeen)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+===== src\app\(app)\layout.tsx
+import type { ReactNode } from 'react';
+import AppShell from '@/components/app-shell';
+
+export default function AppLayout({ children }: { children: ReactNode }) {
+  return <AppShell>{children}</AppShell>;
+}
+
+
+
+===== src\app\login\page.tsx
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { ApiError } from '@/lib/api';
+
+export default function LoginPage() {
+  const { signIn } = useAuth();
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [needs2fa, setNeeds2fa] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await signIn(email, password, needs2fa ? totpCode : undefined);
+      router.replace('/conversations');
+    } catch (err) {
+      if (err instanceof ApiError && err.details) setNeeds2fa(true);
+      setError(err instanceof Error ? err.message : 'Sign in failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="auth-page">
+      <form className="auth-card" onSubmit={onSubmit}>
+        <h1>Sign in</h1>
+        <p className="sub">Welcome back to your live chat dashboard.</p>
+        {error && <div className="alert error">{error}</div>}
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {needs2fa && (
+          <div className="field">
+            <label htmlFor="totp">Two-factor code</label>
+            <input
+              id="totp"
+              inputMode="numeric"
+              maxLength={6}
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value)}
+            />
+          </div>
+        )}
+        <button className="btn" style={{ width: '100%' }} disabled={busy} type="submit">
+          {busy ? 'Signing inâ€¦' : 'Sign in'}
+        </button>
+        <p className="auth-alt">
+          No account? <Link href="/signup">Create one</Link>
+        </p>
+      </form>
+    </div>
+  );
+}
+
+===== src\app\signup\page.tsx
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+
+export default function SignupPage() {
+  const { signUp } = useAuth();
+  const router = useRouter();
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    workspaceName: '',
+  });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await signUp(form);
+      router.replace('/conversations');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign up failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="auth-page">
+      <form className="auth-card" onSubmit={onSubmit}>
+        <h1>Create your workspace</h1>
+        <p className="sub">One line of code adds live chat to your site.</p>
+        {error && <div className="alert error">{error}</div>}
+        <div className="field">
+          <label htmlFor="name">Your name</label>
+          <input id="name" required value={form.name} onChange={set('name')} />
+        </div>
+        <div className="field">
+          <label htmlFor="email">Work email</label>
+          <input id="email" type="email" autoComplete="email" required value={form.email} onChange={set('email')} />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            minLength={10}
+            required
+            value={form.password}
+            onChange={set('password')}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="workspace">Workspace name</label>
+          <input id="workspace" required value={form.workspaceName} onChange={set('workspaceName')} />
+        </div>
+        <button className="btn" style={{ width: '100%' }} disabled={busy} type="submit">
+          {busy ? 'Creatingâ€¦' : 'Create workspace'}
+        </button>
+        <p className="auth-alt">
+          Already have an account? <Link href="/login">Sign in</Link>
+        </p>
+      </form>
+    </div>
+  );
+}
+
+===== src\app\layout.tsx
+import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
+import { AuthProvider } from '@/lib/auth';
+
+// â”€â”€â”€ No-flash theme init (run before paint) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Set `data-theme` on <html> BEFORE React hydrates so there's no lightâ†’dark
+// flash. Reads localStorage; defaults to 'light' (matches the prototype).
+(() => {
+  try {
+    const saved = typeof window !== 'undefined'
+      ? window.localStorage.getItem('lc_theme')
+      : null;
+    const theme = saved === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = theme;
+  } catch {
+    /* ignore */
+  }
+})();
+
+import './globals.css';
+
+export const metadata: Metadata = {
+  title: 'LiveChat Dashboard',
+  description: 'Agent dashboard for the live chat platform',
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
+    </html>
+  );
+}
+
+===== src\app\page.tsx
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+
+/** Root route: bounce to the inbox when signed in, else to login. */
+export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    router.replace(user ? '/conversations' : '/login');
+  }, [loading, user, router]);
+
+  return <div className="loading">Loadingâ€¦</div>;
+}
+

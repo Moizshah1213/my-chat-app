@@ -1,6 +1,18 @@
-# Place this file at the repo root (next to docker-compose.yml).
-# API_DOMAIN comes from the server's .env file.
+# Place at the repo root (next to docker-compose.yml).
+# The three hostnames come from the server's .env file.
+
 {$API_DOMAIN} {
 	encode gzip
 	reverse_proxy api:4000
+}
+
+{$APP_DOMAIN} {
+	encode gzip
+	reverse_proxy dashboard:3000
+}
+
+{$SITE_DOMAIN} {
+	encode gzip
+	root * /srv/site
+	file_server
 }

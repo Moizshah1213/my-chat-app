@@ -16,7 +16,7 @@ x-api: &api
 
 services:
   db:
-    image: postgres:18          # matches your local Postgres 18
+    image: pgvector/pgvector:pg18-trixie   # Postgres 18 + pgvector (needed by migration 0004)
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres   # superuser: used only for bootstrap, never by the app

@@ -50,9 +50,11 @@ services:
     <<: *api
     restart: unless-stopped
     environment:
-      # The running API must never hold the superuser password
+      # The running API must never hold the real superuser password.
+      # Its env check insists on a valid URL here, so give it a harmless dummy
+      # (the API never uses it; only the "tools" service gets the real one).
       POSTGRES_PASSWORD: ""
-      BOOTSTRAP_DATABASE_URL: ""
+      BOOTSTRAP_DATABASE_URL: postgresql://unused:unused@db:5432/postgres
     depends_on:
       db:
         condition: service_healthy

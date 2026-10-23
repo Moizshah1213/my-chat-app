@@ -1,0 +1,39 @@
+﻿  --actt: #111114;
+
+  --or-gradient: linear-gradient(135deg, #F58A4B 0%, #F0561D 60%, #D9440F 100%);
+
+  --ok: #16A34A;
+  --ok-subtle: rgba(22, 163, 74, 0.14);
+  --bad: #F87171;
+  --bad-subtle: rgba(248, 113, 113, 0.14);
+  --warn: #FBBF24;
+  --warn-subtle: rgba(251, 191, 36, 0.14);
+  --info: #60A5FA;
+  --info-subtle: rgba(96, 165, 250, 0.14);
+
+  --sk: #1E1E22;
+  --sk2: #26262B;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 14px 34px rgba(240, 86, 29, 0.35);
+  --shadow-elevated: 0 0 0 1px var(--border), 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --rail-width: 232px;
+}
+
+/* ---- Reduced motion safety net ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  :root[data-theme="dark"] {
+    --duration-fast: 0.001ms;
+    --duration-normal: 0.001ms;
+    --duration-slow: 0.001ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

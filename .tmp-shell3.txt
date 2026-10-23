@@ -1,0 +1,218 @@
+﻿'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
+import {
+  ActivityIcon,
+  BellIcon,
+  BoltIcon,
+  BriefcaseIcon,
+  ChatIcon,
+  GearIcon,
+  KeyIcon,
+  ListIcon,
+  LogOutIcon,
+  SearchIcon,
+  ShieldIcon,
+  SlidersIcon,
+  StarIcon,
+  UsersIcon,
+  VisitorsIcon,
+} from '@/components/icons';
+import { useUIStore } from '@/stores/ui';
+import { cn } from '@/components/ui';
+import { useShallow } from 'zustand/react/shallow';
+import { setTheme } from '@/lib/theme';
+
+const NAV = [
+  { href: '/conversations', label: 'Conversations', Icon: ChatIcon },
+  { href: '/visitors', label: 'Visitors', Icon: VisitorsIcon },
+  { href: '/settings/api-keys', label: 'API Keys', Icon: KeyIcon },
+  { href: '/settings/widget', label: 'Widget Settings', Icon: SlidersIcon },
+  { href: '/settings/members', label: 'Team', Icon: UsersIcon },
+  { href: '/settings/security', label: 'Security', Icon: ShieldIcon },
+  { href: '/settings/activity', label: 'Activity', Icon: ActivityIcon },
+];
+
+function titleFor(pathname: string): string {
+  if (pathname.startsWith('/conversations/')) return 'Conversation';
+  if (pathname.startsWith('/visitors/')) return 'Visitor';
+  if (pathname.startsWith('/settings/api-keys')) return 'API Keys';
+  if (pathname.startsWith('/settings/widget')) return 'Widget Settings';
+  if (pathname.startsWith('/settings/members')) return 'Team';
+  if (pathname.startsWith('/settings/security')) return 'Security';
+  if (pathname.startsWith('/settings/activity')) return 'Activity';
+  if (pathname.startsWith('/settings')) return 'Settings';
+  if (pathname.startsWith('/visitors')) return 'Visitors';
+  return 'Conversations';
+}
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const { user, role, loading, signOut } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [openCount, setOpenCount] = useState(0);
+  const [theme, setThemeState] = useState<'light' | 'dark'>('light');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [railCollapsed, setRailCollapsed] = useUIStore((s) => [s.railCollapsed, s.setRailCollapsed] as const);
+  const canManageSettings = role === 'owner' || role === 'admin';
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    api
+      .listConversations({ status: 'open', limit: 100 })
+      .then((page) => {
+        if (!cancelled) setOpenCount(page.items.length);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, pathname]);
+
+  function onGlobalSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const query = q.trim();
+    window.dispatchEvent(new CustomEvent<string>('lc-search', { detail: query }));
+    if (!pathname.startsWith('/conversations')) {
+      router.push(query ? `/conversations?q=${encodeURIComponent(query)}` : '/conversations');
+    }
+  }
+
+  function doSignOut() {
+    setMenuOpen(false);
+    void signOut().then(() => router.replace('/login'));
+  }
+
+  function onThemeToggle(t: 'light' | 'dark') {
+    setThemeState(t);
+    setTheme(t);
+  }
+
+  const initials = (user?.name || user?.email || '?')
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return (
+    <div className="shell">
+      <header className="top">
+        <div className="logo">
+          <Link href="/conversations" aria-label="LiveChat home">
+            <span className="logo-icon">L</span>
+            <span className="logo-name">[YOUR PRODUCT]</span>
+          </Link>
+        </div>
+
+        <nav className="pill nav" aria-label="Main">
+          <span className="ind" id="ind" />
+          {NAV.map(({ href, label, Icon }) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn('nav-btn', active && 'active')}
+                data-p={href}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon size={17} />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="tools">
+          <div className="pill">
+            <button className="ib" aria-label="Search">
+              <SearchIcon size={18} />
+            </button>
+            <button className="ib" aria-label="Notifications">
+              <BellIcon size={18} />
+            </button>
+            <button className="ib" aria-label="Help">
+              <GearIcon size={18} />
+            </button>
+          </div>
+          <div className="pill user">
+            <span className="av">{initials}</span>
+            <span>
+              <b>{user?.name || 'Agent'}</b>
+              <small>{user?.email || ''}</small>
+            </span>
+          </div>
+        </div>
+      </header>
+    
+      <aside className={cn('rail', railCollapsed ? 'collapsed' : '')} aria-label="Quick">
+        <div className="pill">
+          <button
+            className="ib"
+            id="tl"
+            aria-label="Light theme"
+            onClick={() => onThemeToggle('light')}
+          >
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" />
+            </svg>
+          </button>
+          <button
+            className="ib"
+            id="td"
+            aria-label="Dark theme"
+            onClick={() => onThemeToggle('dark')}
+          >
+            <svg viewBox="0 0 24 24">
+              <path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="pill grow" id="rail">
+          {NAV.map(({ href, label, Icon }) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn('ib act', active && 'active')}
+                aria-label={label}
+                data-p={href}
+              >
+                <Icon size={19} />
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="pill">
+          <button className="ib" aria-label="Help">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .6-1.5 1-1.5 2M12 17h.01" />
+            </svg>
+          </button>
+          <button className="ib" aria-label="Log out" onClick={doSignOut}>
+            <svg viewBox="0 0 24 24">
+              <path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <main id="main" aria-live="polite">
+        {children}
+      </main>
+    </div>
+  );
+}

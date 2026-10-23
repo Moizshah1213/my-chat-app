@@ -1,5 +1,7 @@
-# Place this file at the repo root (next to pnpm-workspace.yaml).
-# On the server, a file named .env in the same folder provides the values.
+# Place at the repo root (next to pnpm-workspace.yaml).
+# Two env files live ONLY on the server (never in git):
+#   .env     -> used by compose itself (POSTGRES_PASSWORD, API_DOMAIN)
+#   api.env  -> given to the API container (app secrets, app_user / app_migrator URLs)
 
 x-logging: &logging
   driver: json-file
@@ -9,17 +11,17 @@ x-logging: &logging
 
 services:
   db:
-    image: postgres:16        # use the SAME major version as your local Postgres
+    image: postgres:18          # matches your local Postgres 18
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: postgres   # superuser: used ONLY for bootstrap, never by the app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    # NO "ports:" here on purpose. The database must never be public.
+      # Postgres 18+ images keep data in a versioned subfolder, so mount the PARENT folder
+      - pgdata:/var/lib/postgresql
+    # NO "ports:" on purpose. The database must never be public.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -31,7 +33,7 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
-    # NO "ports:" here on purpose.
+    # NO "ports:" on purpose.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -44,13 +46,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
-    env_file: .env
-    environment:
-      NODE_ENV: production
-      PORT: "4000"
-      # Variable names below must match what your API reads (see .env.example)
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      REDIS_URL: redis://redis:6379
+    env_file: api.env
     depends_on:
       db:
         condition: service_healthy

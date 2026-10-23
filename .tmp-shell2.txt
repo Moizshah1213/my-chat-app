@@ -1,0 +1,35 @@
+﻿91	
+92	  function onThemeToggle(t: 'light' | 'dark') {
+93	    setThemeState(t);
+94	    setTheme(t);
+95	  }
+96	
+97	  const initials = (user?.name || user?.email || '?')
+98	    .trim()
+99	    .split(/\s+/)
+100	    .map((w) => w[0])
+101	    .slice(0, 2)
+102	    .join('')
+103	    .toUpperCase();
+104	
+105	  return (
+106	    <div className="shell">
+107	      <header className="top">
+108	        <div className="logo">
+109	          <Link href="/conversations" aria-label="LiveChat home">
+110	            <span className="logo-icon">L</span>
+111	            <span className="logo-name">[YOUR PRODUCT]</span>
+112	          </Link>
+113	        </div>
+114	
+115	        <nav className="pill nav" aria-label="Main">
+116	          <span className="ind" id="ind" />
+117	          {NAV.map(({ href, label, Icon }) => {
+118	            const active = pathname === href || pathname.startsWith(`${href}/`);
+119	            return (
+120	              <Link
+121	                key={href}
+122	                href={href}
+123	                className={cn('nav-btn', active && 'active')}
+124	                data-p={href}
+125	                aria-current={active ? 'page' : undefined}

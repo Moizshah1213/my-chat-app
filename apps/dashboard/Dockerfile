@@ -8,6 +8,10 @@ WORKDIR /app
 RUN npm install -g pnpm@10
 
 COPY . .
+# apps/dashboard/dashboard is a stray nested copy of the dashboard. Next.js type-checks
+# every .tsx file it finds, so that copy breaks the build. Remove it inside the image only
+# (your repo and your files stay untouched).
+RUN rm -rf apps/dashboard/dashboard
 RUN pnpm install --frozen-lockfile --filter "@livechat/dashboard..."
 
 # NEXT_PUBLIC_* values are baked into the browser code at BUILD time.

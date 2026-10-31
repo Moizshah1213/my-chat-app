@@ -24,7 +24,14 @@ export class ConversationsController {
   @Get(':id')
   @RequireCapability('conversations:read')
   get(@CurrentAuth() auth: AuthContext, @Param('id') id: string) {
-    return conversationService.get(auth.workspaceId, auth.role, id);
+    return conversationService.get(auth.workspaceId, auth.role, auth.sub, id);
+  }
+
+  @Post(':id/read')
+  @HttpCode(HttpStatus.OK)
+  @RequireCapability('conversations:read')
+  markRead(@CurrentAuth() auth: AuthContext, @Param('id') id: string) {
+    return conversationService.markRead(auth.workspaceId, auth.role, auth.sub, id);
   }
 
   /** Assign / change status (open|pending|closed) / set subject. */

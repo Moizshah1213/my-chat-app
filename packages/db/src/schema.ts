@@ -347,6 +347,32 @@ export const conversationNotificationPreferences = pgTable(
   }),
 );
 
+export const conversationReadCursors = pgTable(
+  'conversation_read_cursors',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    lastReadAt: timestamp('last_read_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    wsConversationUserUnique: uniqueIndex('conversation_read_cursors_unique').on(
+      t.workspaceId,
+      t.conversationId,
+      t.userId,
+    ),
+    wsUserIdx: index('conversation_read_cursors_ws_user_idx').on(t.workspaceId, t.userId),
+  }),
+);
+
 export const messages = pgTable(
   'messages',
   {

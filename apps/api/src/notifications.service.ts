@@ -68,7 +68,8 @@ async function sendPush(
         title,
         body,
         sound: 'default',
-        channelId: 'messages',
+        channelId: 'messages-v2',
+        priority: 'high',
         data: { type: 'new_message', source: 'push', conversationId, eventKey },
       }))),
     });

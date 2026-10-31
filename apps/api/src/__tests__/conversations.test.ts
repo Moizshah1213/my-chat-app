@@ -216,6 +216,37 @@ after(async () => {
 describe('conversations: list, filters, pagination', () => {
   before(() => resetRateLimits());
 
+  it('counts visitor messages as unread until the agent marks the conversation read', async () => {
+    const conversationId = openConvs[1]!;
+    await boot`
+      INSERT INTO messages (id, workspace_id, conversation_id, sender_type, body, created_at)
+      VALUES
+        (gen_random_uuid(), ${owner.workspaceId}::uuid, ${conversationId}::uuid, 'visitor', 'unread one', now()),
+        (gen_random_uuid(), ${owner.workspaceId}::uuid, ${conversationId}::uuid, 'visitor', 'unread two', now())
+    `;
+
+    const beforeRead = await get(`/v1/conversations/${conversationId}`, owner.accessToken);
+    assert.equal(beforeRead.status, 200);
+    assert.equal(beforeRead.json.unreadCount, 2);
+    const inboxBeforeRead = await get('/v1/conversations?limit=50', owner.accessToken);
+    assert.equal(
+      inboxBeforeRead.json.items.find((item: any) => item.id === conversationId)?.unreadCount,
+      2,
+    );
+
+    const marked = await post(`/v1/conversations/${conversationId}/read`, {}, owner.accessToken);
+    assert.equal(marked.status, 200);
+
+    const afterRead = await get(`/v1/conversations/${conversationId}`, owner.accessToken);
+    assert.equal(afterRead.status, 200);
+    assert.equal(afterRead.json.unreadCount, 0);
+    const inboxAfterRead = await get('/v1/conversations?limit=50', owner.accessToken);
+    assert.equal(
+      inboxAfterRead.json.items.find((item: any) => item.id === conversationId)?.unreadCount,
+      0,
+    );
+  });
+
   it('lists newest-first and pages exhaustively with keyset cursor (no overlap)', async () => {
     const expected = new Set([...openConvs, closedConv, msgConv]);
     const seen: string[] = [];

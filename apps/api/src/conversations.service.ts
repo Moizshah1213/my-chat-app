@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql, desc } from 'drizzle-orm';
 import {
   conversations,
+  conversationReadCursors,
   conversationNotificationPreferences,
   messages,
   visitors,
@@ -78,6 +79,7 @@ export interface ConversationView {
   lastMessageAt: Date;
   lastMessagePreview?: string | null;
   lastMessageSenderType?: string | null;
+  unreadCount: number;
   createdAt: Date;
   visitor: { id: string | null; name: string | null; email: string | null };
 }
@@ -93,36 +95,53 @@ export interface MessageView {
   editedAt?: Date | null;
 }
 
-const CONVERSATION_SELECT = {
-  id: conversations.id,
-  status: conversations.status,
-  assignedTo: conversations.assignedTo,
-  subject: conversations.subject,
-  closedAt: conversations.closedAt,
-  lastMessageAt: conversations.lastMessageAt,
-  lastMessagePreview: sql<string | null>`(
-    SELECT left(m.body, 180)
-    FROM messages m
-    WHERE m.workspace_id = conversations.workspace_id
-      AND m.conversation_id = conversations.id
-      AND m.deleted_at IS NULL
-    ORDER BY m.created_at DESC, m.id DESC
-    LIMIT 1
-  )`.as('lastMessagePreview'),
-  lastMessageSenderType: sql<string | null>`(
-    SELECT m.sender_type
-    FROM messages m
-    WHERE m.workspace_id = conversations.workspace_id
-      AND m.conversation_id = conversations.id
-      AND m.deleted_at IS NULL
-    ORDER BY m.created_at DESC, m.id DESC
-    LIMIT 1
-  )`.as('lastMessageSenderType'),
-  createdAt: conversations.createdAt,
-  visitorId: visitors.id,
-  visitorName: visitors.name,
-  visitorEmail: visitors.email,
-};
+function conversationSelect(userId: string) {
+  return {
+    id: conversations.id,
+    status: conversations.status,
+    assignedTo: conversations.assignedTo,
+    subject: conversations.subject,
+    closedAt: conversations.closedAt,
+    lastMessageAt: conversations.lastMessageAt,
+    lastMessagePreview: sql<string | null>`(
+      SELECT left(m.body, 180)
+      FROM messages m
+      WHERE m.workspace_id = conversations.workspace_id
+        AND m.conversation_id = conversations.id
+        AND m.deleted_at IS NULL
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT 1
+    )`.as('lastMessagePreview'),
+    lastMessageSenderType: sql<string | null>`(
+      SELECT m.sender_type
+      FROM messages m
+      WHERE m.workspace_id = conversations.workspace_id
+        AND m.conversation_id = conversations.id
+        AND m.deleted_at IS NULL
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT 1
+    )`.as('lastMessageSenderType'),
+    unreadCount: sql<number>`(
+      SELECT COUNT(*)::int
+      FROM messages unread_messages
+      WHERE unread_messages.workspace_id = conversations.workspace_id
+        AND unread_messages.conversation_id = conversations.id
+        AND unread_messages.sender_type = 'visitor'
+        AND unread_messages.deleted_at IS NULL
+        AND unread_messages.created_at > COALESCE((
+          SELECT read_cursors.last_read_at
+          FROM conversation_read_cursors read_cursors
+          WHERE read_cursors.workspace_id = conversations.workspace_id
+            AND read_cursors.conversation_id = conversations.id
+            AND read_cursors.user_id = ${userId}::uuid
+        ), conversations.created_at)
+    )`.as('unreadCount'),
+    createdAt: conversations.createdAt,
+    visitorId: visitors.id,
+    visitorName: visitors.name,
+    visitorEmail: visitors.email,
+  };
+}
 
 function toConversationView(row: any): ConversationView {
   return {
@@ -134,6 +153,7 @@ function toConversationView(row: any): ConversationView {
     lastMessageAt: row.lastMessageAt,
     lastMessagePreview: row.lastMessagePreview ?? null,
     lastMessageSenderType: row.lastMessageSenderType ?? null,
+    unreadCount: row.unreadCount ?? 0,
     createdAt: row.createdAt,
     visitor: { id: row.visitorId ?? null, name: row.visitorName ?? null, email: row.visitorEmail ?? null },
   };
@@ -174,7 +194,7 @@ export const conversationService = {
       }
 
       const rows = await tx
-        .select(CONVERSATION_SELECT)
+        .select(conversationSelect(userId))
         .from(conversations)
         .leftJoin(visitors, eq(conversations.visitorId, visitors.id))
         .where(and(...conds))
@@ -192,13 +212,13 @@ export const conversationService = {
     });
   },
 
-  async get(workspaceId: string, role: Role, conversationId: string): Promise<ConversationView> {
+  async get(workspaceId: string, role: Role, userId: string, conversationId: string): Promise<ConversationView> {
     assertCapability(role, 'conversations:read');
     assertId(conversationId);
     return withTenant(DB_URL(), workspaceId, async () => {
       const tx = currentTx();
       const rows = await tx
-        .select(CONVERSATION_SELECT)
+        .select(conversationSelect(userId))
         .from(conversations)
         .leftJoin(visitors, eq(conversations.visitorId, visitors.id))
         .where(and(
@@ -210,6 +230,46 @@ export const conversationService = {
       if (!rows[0]) throw notFound('Conversation not found');
       return toConversationView(rows[0]);
     });
+  },
+
+  async markRead(workspaceId: string, role: Role, userId: string, conversationId: string) {
+    assertCapability(role, 'conversations:read');
+    assertId(conversationId);
+    await withTenant(DB_URL(), workspaceId, async () => {
+      const tx = currentTx();
+      const [conversation] = await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .limit(1);
+      if (!conversation) throw notFound('Conversation not found');
+
+      await tx
+        .insert(conversationReadCursors)
+        .values({
+          workspaceId,
+          conversationId,
+          userId,
+          lastReadAt: sql`now()`,
+        })
+        .onConflictDoUpdate({
+          target: [
+            conversationReadCursors.workspaceId,
+            conversationReadCursors.conversationId,
+            conversationReadCursors.userId,
+          ],
+          set: {
+            lastReadAt: sql`GREATEST(${conversationReadCursors.lastReadAt}, now())`,
+            updatedAt: sql`now()`,
+          },
+        });
+    });
+    emitToWorkspace(workspaceId, 'conversation:updated', { conversationId, readByUserId: userId });
+    return { ok: true as const };
   },
 
   /**
@@ -271,6 +331,7 @@ export const conversationService = {
       subject: updated.subject,
       closedAt: updated.closedAt,
       lastMessageAt: updated.lastMessageAt,
+      unreadCount: 0,
       createdAt: updated.createdAt,
       visitor: { id: null, name: null, email: null },
     };

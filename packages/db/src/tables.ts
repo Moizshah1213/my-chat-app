@@ -8,6 +8,7 @@ export const TENANT_TABLES = [
   'visitors',
   'conversations',
   'messages',
+  'conversation_read_cursors',
   'audit_logs',
   'email_settings',
   'ai_settings',

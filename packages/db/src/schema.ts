@@ -10,6 +10,8 @@ import {
   index,
   uniqueIndex,
   serial,
+  bigint,
+  numeric,
 } from 'drizzle-orm/pg-core';
 import { citext } from './citext.js';
 
@@ -30,16 +32,30 @@ export type InvationToken = typeof invitationTokens.$inferSelect;
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: citext('email').notNull().unique(),
+  googleSubject: text('google_subject'),
   passwordHash: text('password_hash').notNull(),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   totpSecretEnc: text('totp_secret_enc'), // AES-256-GCM encrypted at rest
   totpEnabled: boolean('totp_enabled').notNull().default(false),
   recoveryCodesHash: text('recovery_codes_hash'), // JSON array of argon2 hashes
   name: text('name'),
+  phone: text('phone'),
+  avatarUrl: text('avatar_url'),
+  pendingEmail: citext('pending_email'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   failedLogins: integer('failed_logins').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
+}, (t) => ({
+  pendingEmailIdx: uniqueIndex('users_pending_email_idx').on(t.pendingEmail),
+  googleSubjectIdx: uniqueIndex('users_google_subject_unique').on(t.googleSubject),
+}));
+
+export const userAvatars = pgTable('user_avatars', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  mimeType: text('mime_type').notNull(),
+  imageData: text('image_data').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const workspaces = pgTable('workspaces', {
@@ -61,11 +77,13 @@ export const refreshTokens = pgTable(
     workspaceId: uuid('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull(),
     familyId: uuid('family_id').notNull(),
+    twoFactorSkipped: boolean('two_factor_skipped').notNull().default(false),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     replacedBy: uuid('replaced_by'),
     ip: text('ip'),
     userAgent: text('user_agent'),
+    location: text('location'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -82,7 +100,7 @@ export const emailTokens = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    type: text('type').notNull(), // 'verify' | 'reset'
+    type: text('type').notNull(), // 'verify' | 'reset' | 'email_change'
     tokenHash: text('token_hash').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     usedAt: timestamp('used_at', { withTimezone: true }),
@@ -91,6 +109,27 @@ export const emailTokens = pgTable(
   (t) => ({
     hashIdx: uniqueIndex('email_tokens_hash_idx').on(t.tokenHash),
     userIdx: index('email_tokens_user_idx').on(t.userId),
+  }),
+);
+
+export const qrLoginChallenges = pgTable(
+  'qr_login_challenges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    challengeHash: text('challenge_hash').notNull(),
+    pollTokenHash: text('poll_token_hash').notNull(),
+    origin: text('origin').notNull(),
+    status: text('status').notNull().default('pending'),
+    approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+    workspaceId: uuid('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    role: text('role'),
+    twoFactorSkipped: boolean('two_factor_skipped').notNull().default(false),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    challengeIdx: uniqueIndex('qr_login_challenges_challenge_idx').on(t.challengeHash),
+    expiryIdx: index('qr_login_challenges_expiry_idx').on(t.expiresAt),
   }),
 );
 
@@ -116,6 +155,27 @@ export const memberships = pgTable(
     wsUserUnique: uniqueIndex('memberships_ws_user_unique').on(t.workspaceId, t.userId),
     userIdx: index('memberships_user_idx').on(t.userId),
     wsIdx: index('memberships_ws_idx').on(t.workspaceId),
+  }),
+);
+
+export const mobilePushTokens = pgTable(
+  'mobile_push_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tokenIdx: uniqueIndex('mobile_push_tokens_token_idx').on(t.token),
+    workspaceUserIdx: index('mobile_push_tokens_workspace_user_idx').on(t.workspaceId, t.userId),
   }),
 );
 
@@ -160,13 +220,21 @@ export const widgetSettings = pgTable('widget_settings', {
   workspaceId: uuid('workspace_id')
     .primaryKey()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
-  color: text('color').notNull().default('#4f46e5'),
+  color: text('color').notNull().default('#303033'),
+  theme: text('theme').notNull().default('dark'),
+  backgroundColor: text('background_color').notNull().default('#000000'),
+  backgroundGradient: boolean('background_gradient').notNull().default(false),
+  backgroundGradientColor: text('background_gradient_color').notNull().default('#19191d'),
+  buttonColor: text('button_color').notNull().default('#f4f4f5'),
+  agentBubbleColor: text('agent_bubble_color').notNull().default('#1b1b1c'),
   logoUrl: text('logo_url'),
   position: text('position').notNull().default('right'),
   greeting: text('greeting'),
   offlineMessage: text('offline_message'),
   prechatFields: jsonb('prechat_fields').notNull().default([]),
+  prechatEnabled: boolean('prechat_enabled').notNull().default(true),
   workingHours: jsonb('working_hours').notNull().default({}),
+  quickReplies: jsonb('quick_replies').notNull().default([]),
   aiEnabled: boolean('ai_enabled').notNull().default(false),
   aiInstructions: text('ai_instructions'),
   allowedDomains: text('allowed_domains').array().notNull().default([]),
@@ -202,7 +270,17 @@ export const visitors = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     anonId: text('anon_id').notNull(),
     name: text('name'),
+    displayName: text('display_name'),
+    number: bigint('number', { mode: 'number' }),
     email: citext('email'),
+    city: text('city'),
+    browser: text('browser'),
+    os: text('os'),
+    device: text('device'),
+    currentUrl: text('current_url'),
+    referrer: text('referrer'),
+    tags: text('tags').array().notNull().default([]),
+    notes: text('notes'),
     ipHash: text('ip_hash'),
     country: text('country'),
     userAgent: text('user_agent'),
@@ -231,6 +309,7 @@ export const conversations = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (t) => ({
     wsStatusLastIdx: index('conversations_ws_status_last_idx').on(
@@ -239,6 +318,32 @@ export const conversations = pgTable(
       t.lastMessageAt,
     ),
     wsIdx: index('conversations_ws_idx').on(t.workspaceId),
+  }),
+);
+
+export const conversationNotificationPreferences = pgTable(
+  'conversation_notification_preferences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    paused: boolean('paused').notNull().default(true),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    wsConversationUserUnique: uniqueIndex('conversation_notification_preferences_unique').on(
+      t.workspaceId,
+      t.conversationId,
+      t.userId,
+    ),
+    wsUserIdx: index('conversation_notification_preferences_ws_user_idx').on(t.workspaceId, t.userId),
   }),
 );
 
@@ -290,3 +395,67 @@ export const auditLogs = pgTable(
   }),
 );
 
+
+
+
+export const aiSettings = pgTable('ai_settings', {
+  workspaceId: uuid('workspace_id').primaryKey().references(() => workspaces.id, { onDelete: 'cascade' }),
+  mode: text('mode').notNull().default('off'),
+  provider: text('provider').notNull().default('openai_compatible'),
+  baseUrl: text('base_url'),
+  model: text('model'),
+  apiKeyEnc: text('api_key_enc'),
+  apiKeyLast4: text('api_key_last4'),
+  instructions: jsonb('instructions').notNull().default({}),
+  temperature: numeric('temperature', { precision: 3, scale: 2 }).notNull().default('0.3'),
+  maxOutputTokens: integer('max_output_tokens').notNull().default(400),
+  monthlyTokenCap: integer('monthly_token_cap').notNull().default(200000),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Email provider configuration (workspace-scoped). `passwordEnc` is sealed
+ * at rest via a vault. `fromEmail` must be a verified allowed sender.
+ */
+export const emailSettings = pgTable(
+  'email_settings',
+  {
+    workspaceId: uuid('workspace_id')
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull().default('smtp'),
+    host: text('host'),
+    port: integer('port'),
+    user: text('user'),
+    passwordEnc: text('password_enc'),
+    fromEmail: text('from_email'),
+    fromName: text('from_name'),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    updatedBy: uuid('updated_by'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    wsIdx: index('email_settings_ws_idx').on(t.workspaceId),
+  }),
+);
+
+/**
+ * Monthly AI token-usage rollup (workspace-scoped).
+ */
+export const aiUsage = pgTable(
+  'ai_usage',
+  {
+    workspaceId: uuid('workspace_id')
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(),
+    promptTokens: bigint('prompt_tokens', { mode: 'number' }).notNull().default(0),
+    completionTokens: bigint('completion_tokens', { mode: 'number' }).notNull().default(0),
+    totalTokens: bigint('total_tokens', { mode: 'number' }).notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    monthIdx: uniqueIndex('ai_usage_ws_month_unique').on(t.workspaceId, t.month),
+  }),
+);

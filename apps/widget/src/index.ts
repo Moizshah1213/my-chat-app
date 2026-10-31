@@ -6,7 +6,7 @@ import { LiveChatWidget } from './widget.js';
  * window.LiveChat (open/close/identify/setAttributes/on/destroy).
  *
  *   <script src="https://cdn.example.com/widget.js"
- *           data-public-key="pk_…" data-api-url="https://api.example.com" async></script>
+ *           data-public-key="qvse_…" data-api-url="https://api.example.com" async></script>
  */
 function boot(): void {
   // SSR / prerender safety: no DOM → nothing to mount.

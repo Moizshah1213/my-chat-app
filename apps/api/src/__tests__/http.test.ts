@@ -1,13 +1,14 @@
 import '../load-env.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
-import { after, before, describe, it } from 'node:test';
+import { after, before, beforeEach, describe, it } from 'node:test';
 import postgres from 'postgres';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { authenticator } from 'otplib';
 import { AppModule } from '../app.module.js';
+import { authService } from '../auth-service.js';
 import { resetRateLimits } from '../rate-limit.js';
 import { closeDb } from '@livechat/db';
 
@@ -24,6 +25,7 @@ import { closeDb } from '@livechat/db';
 // Route all app-layer DB access to the TEST database for this process.
 // Must happen before any request is served (services read it at call time).
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+process.env.EMAIL_PROVIDER = 'console';
 
 const BOOT_URL = process.env.BOOTSTRAP_DATABASE_URL!.replace(/\/[^/]+$/, '/livechat_test');
 let boot: ReturnType<typeof postgres>;
@@ -41,17 +43,28 @@ interface HttpResult {
 
 async function post(
   path: string,
-  opts: { body?: unknown; cookie?: string; bearer?: string } = {},
+  opts: {
+    body?: unknown;
+    cookie?: string;
+    bearer?: string;
+    userAgent?: string;
+    origin?: string;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<HttpResult> {
   const res = await fetch(base + path, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
+      ...(opts.userAgent ? { 'user-agent': opts.userAgent } : {}),
+      ...(opts.origin ? { origin: opts.origin } : {}),
+      ...opts.headers,
       ...(opts.cookie ? { cookie: opts.cookie } : {}),
       ...(opts.bearer ? { authorization: `Bearer ${opts.bearer}` } : {}),
     },
     body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
   });
+
   let json: any = null;
   try {
     json = await res.json();
@@ -75,6 +88,20 @@ async function get(path: string, bearer?: string): Promise<HttpResult> {
   return { status: res.status, json, setCookies: [] };
 }
 
+async function remove(path: string, bearer?: string): Promise<HttpResult> {
+  const res = await fetch(base + path, {
+    method: 'DELETE',
+    headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
+  });
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    /* no body */
+  }
+  return { status: res.status, json, setCookies: [] };
+}
+
 /** Extract the refresh_token value from Set-Cookie headers. */
 function refreshCookie(setCookies: string[]): string | undefined {
   for (const c of setCookies) {
@@ -86,21 +113,56 @@ function refreshCookie(setCookies: string[]): string | undefined {
 
 async function signup(
   label: string,
-): Promise<{ email: string; accessToken: string; cookie: string; refreshToken: string }> {
+  enableTwoFactor = true,
+): Promise<{ id: string; email: string; accessToken: string; cookie: string; refreshToken: string; totpSecret?: string }> {
   const email = `${label}-${uniq()}@example.com`;
   createdEmails.push(email);
-  const res = await post('/v1/auth/signup', {
-    body: { email, password: 'correct-horse-battery', name: label, workspaceName: `${label} WS` },
-  });
+  const loggedTokens: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    const line = String(args[0] ?? '');
+    if (line.startsWith('[email:verify]')) loggedTokens.push(line.split('-> ')[1]?.trim() ?? '');
+    originalLog.apply(console, args as []);
+  };
+  let res: HttpResult;
+  try {
+    res = await post('/v1/auth/signup', {
+      body: { email, password: 'correct-horse-battery', name: label, workspaceName: `${label} WS` },
+    });
+  } finally {
+    console.log = originalLog;
+  }
   assert.equal(res.status, 200, `signup ${label} should succeed: ${JSON.stringify(res.json)}`);
-  const cookie = refreshCookie(res.setCookies);
-  assert.ok(cookie, 'signup must set the refresh cookie');
-  assert.ok(res.json.refreshToken, 'signup must return refreshToken in the body');
+  assert.equal(res.json.requiresEmailVerification, true);
+  const verificationToken = loggedTokens[0];
+  assert.ok(verificationToken, 'signup sent a verification link');
+  const verified = await post('/v1/auth/verify-email', { body: { token: verificationToken } });
+  assert.equal(verified.status, 200, 'verification link should verify the account');
+  const login = await post('/v1/auth/login', {
+    body: { email, password: 'correct-horse-battery' },
+  });
+  assert.equal(login.status, 200, `verified account should sign in: ${JSON.stringify(login.json)}`);
+  const cookie = refreshCookie(login.setCookies);
+  assert.ok(cookie, 'login must set the refresh cookie');
+  assert.ok(login.json.refreshToken, 'login must return refreshToken in the body');
+  let totpSecret: string | undefined;
+  if (enableTwoFactor) {
+    const setup = await post('/v1/auth/2fa/setup', { bearer: login.json.accessToken });
+    assert.equal(setup.status, 200, `2FA setup should succeed: ${JSON.stringify(setup.json)}`);
+    totpSecret = setup.json.secret as string;
+    const enabled = await post('/v1/auth/2fa/verify', {
+      bearer: login.json.accessToken,
+      body: { code: authenticator.generate(totpSecret) },
+    });
+    assert.equal(enabled.status, 200, `2FA enrollment should succeed: ${JSON.stringify(enabled.json)}`);
+  }
   return {
+    id: login.json.user.id as string,
     email,
-    accessToken: res.json.accessToken,
+    accessToken: login.json.accessToken,
     cookie: `refresh_token=${cookie}`,
-    refreshToken: res.json.refreshToken,
+    refreshToken: login.json.refreshToken,
+    totpSecret,
   };
 }
 
@@ -127,9 +189,251 @@ after(async () => {
 });
 
 describe('HTTP session lifecycle', () => {
-  // The rate limiter is in-process state shared across the whole file; reset
-  // per suite so the ip-keyed signup budget (10/min) never bleeds between them.
-  before(() => resetRateLimits());
+  // Keep helper-created test accounts from consuming the verification budget
+  // needed by later cases in this shared-process HTTP suite.
+  beforeEach(() => resetRateLimits());
+
+  it('rate limits REST message sends to 30 requests per minute', async () => {
+    const user = await signup('http-message-rate-limit');
+    const conversationId = '00000000-0000-4000-8000-000000000001';
+    const results = await Promise.all(
+      Array.from({ length: 31 }, () =>
+        post(`/v1/conversations/${conversationId}/messages`, {
+          bearer: user.accessToken,
+          body: {},
+        }),
+      ),
+    );
+    assert.equal(results.filter((result) => result.status === 429).length, 1);
+  });
+
+  it('approves dashboard QR sign-in once from an authenticated mobile session', async () => {
+    const mobile = await signup('http-qr-login');
+    const pollToken = 'A'.repeat(43);
+    const started = await post('/v1/auth/qr/start', {
+      body: { pollToken },
+      origin: 'http://localhost:3000',
+    });
+    assert.equal(started.status, 200, JSON.stringify(started.json));
+    assert.match(started.json.challengeToken, /^[A-Za-z0-9_-]{43}$/);
+
+    const blockedOrigin = await post('/v1/auth/qr/start', {
+      body: { pollToken },
+      origin: 'https://untrusted.example',
+    });
+    assert.equal(blockedOrigin.status, 403);
+
+    const inspected = await post('/v1/auth/qr/inspect', {
+      body: { challengeToken: started.json.challengeToken },
+    });
+    assert.equal(inspected.status, 200);
+    assert.equal(inspected.json.status, 'pending');
+    assert.equal(inspected.json.origin, 'http://localhost:3000');
+
+    const anonymousApproval = await post('/v1/auth/qr/approve', {
+      body: { challengeToken: started.json.challengeToken },
+    });
+    assert.equal(anonymousApproval.status, 401);
+
+    const approval = await post('/v1/auth/qr/approve', {
+      bearer: mobile.accessToken,
+      body: { challengeToken: started.json.challengeToken },
+    });
+    assert.equal(approval.status, 200, JSON.stringify(approval.json));
+
+    const wrongPollSecret = await post('/v1/auth/qr/poll', {
+      body: { challengeToken: started.json.challengeToken, pollToken: 'B'.repeat(43) },
+    });
+    assert.equal(wrongPollSecret.status, 401);
+
+    const completed = await post('/v1/auth/qr/poll', {
+      body: { challengeToken: started.json.challengeToken, pollToken },
+    });
+    assert.equal(completed.status, 200, JSON.stringify(completed.json));
+    assert.equal(completed.json.status, 'approved');
+    assert.equal(completed.json.user.id, mobile.id);
+    assert.notEqual(completed.json.accessToken, mobile.accessToken);
+    assert.ok(completed.json.refreshToken);
+    assert.ok(refreshCookie(completed.setCookies));
+
+    const replay = await post('/v1/auth/qr/poll', {
+      body: { challengeToken: started.json.challengeToken, pollToken },
+    });
+    assert.equal(replay.status, 200);
+    assert.equal(replay.json.status, 'consumed');
+    assert.equal(replay.json.accessToken, undefined);
+  });
+
+  it('registers push tokens only for the authenticated account that owns them', async () => {
+    const first = await signup('http-push-token-first');
+    const second = await signup('http-push-token-second');
+    const token = `ExponentPushToken[${uniq()}]`;
+
+    const registered = await post('/v1/notifications/push-token', {
+      bearer: first.accessToken,
+      body: { token },
+    });
+    assert.equal(registered.status, 200, JSON.stringify(registered.json));
+
+    const duplicate = await post('/v1/notifications/push-token', {
+      bearer: first.accessToken,
+      body: { token },
+    });
+    assert.equal(duplicate.status, 200, 'registering the same device token is idempotent');
+
+    const stolen = await post('/v1/notifications/push-token', {
+      bearer: second.accessToken,
+      body: { token },
+    });
+    assert.equal(stolen.status, 409, 'another account cannot claim an existing device token');
+
+    const invalid = await post('/v1/notifications/push-token', {
+      bearer: first.accessToken,
+      body: { token: 'not-an-expo-token' },
+    });
+    assert.equal(invalid.status, 400);
+  });
+
+  it('requires email verification before a new account can sign in', async () => {
+    const email = `unverified-${uniq()}@example.com`;
+    createdEmails.push(email);
+    const loggedTokens: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => {
+      const line = String(args[0] ?? '');
+      if (line.startsWith('[email:verify]')) loggedTokens.push(line.split('-> ')[1]?.trim() ?? '');
+      originalLog.apply(console, args as []);
+    };
+    let registration: HttpResult;
+    try {
+      registration = await post('/v1/auth/signup', {
+        body: { email, password: 'correct-horse-battery', name: 'Unverified', workspaceName: 'Unverified WS' },
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.equal(registration.status, 200);
+    assert.deepEqual(registration.json, { requiresEmailVerification: true, email });
+    assert.equal(refreshCookie(registration.setCookies), undefined);
+
+    const blocked = await post('/v1/auth/login', {
+      body: { email, password: 'correct-horse-battery' },
+    });
+    assert.equal(blocked.status, 403);
+    assert.match(blocked.json.error.message, /verify your email/i);
+
+    const verified = await post('/v1/auth/verify-email', {
+      body: { token: loggedTokens[0] },
+    });
+    assert.equal(verified.status, 200);
+    const login = await post('/v1/auth/login', {
+      body: { email, password: 'correct-horse-battery' },
+    });
+    assert.equal(login.status, 200);
+    assert.ok(login.json.accessToken);
+  });
+
+  it('records IP and device information when a password login creates a session', async () => {
+    const user = await signup('http-session-metadata', false);
+    const userAgent = 'QonviloSessionTest/1.0 (Windows; Desktop)';
+    const login = await post('/v1/auth/login', {
+      body: { email: user.email, password: 'correct-horse-battery' },
+      userAgent,
+      headers: {
+        'x-vercel-ip-city': 'Toronto',
+        'x-vercel-ip-country-region': 'Ontario',
+        'x-vercel-ip-country': 'CA',
+      },
+    });
+    assert.equal(login.status, 200, JSON.stringify(login.json));
+
+    const sessions = await authService.listSessions(login.json.user.id, login.json.refreshToken);
+    const current = sessions.find((session) => session.current);
+    assert.ok(current, 'the newly created session is marked current');
+    assert.equal(current.userAgent, userAgent);
+    assert.ok(current.ip, 'the request IP is stored');
+    assert.equal(current.location, 'Toronto, Ontario, CA');
+
+    const skipped2fa = await post('/v1/auth/2fa/skip', { bearer: login.json.accessToken });
+    assert.equal(skipped2fa.status, 200);
+    const listed = await get('/v1/auth/sessions', skipped2fa.json.accessToken);
+    assert.equal(listed.status, 200);
+    assert.equal(listed.json.find((session: { current: boolean }) => session.current)?.id, current.id);
+
+    const secondLogin = await post('/v1/auth/login', {
+      body: { email: user.email, password: 'correct-horse-battery' },
+      userAgent: 'QonviloSecondSession/1.0',
+    });
+    assert.equal(secondLogin.status, 200);
+    const secondSkipped2fa = await post('/v1/auth/2fa/skip', { bearer: secondLogin.json.accessToken });
+    assert.equal(secondSkipped2fa.status, 200);
+    const activeBeforeLogout = await authService.listSessions(user.id, secondLogin.json.refreshToken);
+
+    const loggedOut = await post('/v1/auth/logout-all', {
+      bearer: secondSkipped2fa.json.accessToken,
+      body: { refreshToken: secondLogin.json.refreshToken },
+    });
+    assert.equal(loggedOut.status, 200);
+    assert.equal(loggedOut.json.revoked, activeBeforeLogout.length - 1, 'body refresh token preserves the mobile caller session');
+    const remaining = await authService.listSessions(user.id, secondLogin.json.refreshToken);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0]?.current, true);
+  });
+
+  it('uploads profile photos for the signed-in user and serves them as image bytes', async () => {
+    const user = await signup('http-avatar-upload');
+    const imageData = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=';
+    const uploaded = await post('/v1/auth/profile/avatar', {
+      bearer: user.accessToken,
+      body: { mimeType: 'image/jpeg', imageData },
+    });
+    assert.equal(uploaded.status, 201, JSON.stringify(uploaded.json));
+    assert.match(uploaded.json.avatarUrl, new RegExp(`^/v1/auth/avatar/${user.id}\\?v=`));
+
+    const photo = await fetch(`${base}${uploaded.json.avatarUrl}`);
+    assert.equal(photo.status, 200);
+    assert.equal(photo.headers.get('content-type'), 'image/jpeg');
+    assert.equal(
+      Buffer.from(await photo.arrayBuffer()).toString('base64'),
+      imageData,
+    );
+
+    const forbiddenMime = await post('/v1/auth/profile/avatar', {
+      bearer: user.accessToken,
+      body: { mimeType: 'image/jpeg', imageData: Buffer.from('not an image').toString('base64') },
+    });
+    assert.equal(forbiddenMime.status, 400);
+  });
+
+  it('rejects existing unverified access tokens from protected routes', async () => {
+    const email = `legacy-unverified-${uniq()}@example.com`;
+    createdEmails.push(email);
+    const legacySession = await authService.signup({
+      email,
+      password: 'correct-horse-battery',
+      name: 'Legacy unverified',
+      workspaceName: 'Legacy unverified WS',
+    });
+    const protectedResponse = await get('/v1/workspace', legacySession.accessToken);
+    assert.equal(protectedResponse.status, 403);
+    assert.match(protectedResponse.json.error.message, /verify your email/i);
+  });
+
+  it('forgot-password response does not reveal whether the email exists', async () => {
+    const missingEmail = `missing-${uniq()}@example.com`;
+    const missing = await post('/v1/auth/forgot-password', {
+      body: { email: missingEmail },
+    });
+    assert.equal(missing.status, 202);
+    assert.deepEqual(missing.json, { ok: true });
+
+    const user = await signup('forgot-password');
+    const found = await post('/v1/auth/forgot-password', {
+      body: { email: user.email },
+    });
+    assert.equal(found.status, 202);
+    assert.deepEqual(found.json, { ok: true });
+  });
 
   it('signup -> refresh rotates the cookie; reusing the old cookie is rejected', async () => {
     const u = await signup('http-rot');
@@ -166,7 +470,7 @@ describe('HTTP session lifecycle', () => {
   });
 
   it('mobile contract: body-borne refreshToken refreshes/rotates without cookies', async () => {
-    const u = await signup('http-mob');
+    const u = await signup('http-mob', false);
 
     // Refresh presents the token in the JSON body — no cookie involved.
     const rf = await post('/v1/auth/refresh', { body: { refreshToken: u.refreshToken } });
@@ -196,7 +500,7 @@ describe('HTTP session lifecycle', () => {
   });
 
   it('2FA two-step login: requires2fa+tempToken, then verify completes anonymously', async () => {
-    const u = await signup('http-2fa');
+    const u = await signup('http-2fa', false);
 
     // Enroll 2FA (Bearer-authenticated setup + confirm — web flow regression).
     const setup = await post('/v1/auth/2fa/setup', { bearer: u.accessToken });
@@ -243,6 +547,33 @@ describe('HTTP session lifecycle', () => {
     assert.equal(sneaky.status, 401, 'tempToken rejected as access token');
   });
 
+  it('requires 2FA before workspace access; skip is limited to the active sign-in session', async () => {
+    const u = await signup('http-2fa-skip', false);
+    const blocked = await get('/v1/auth/sessions', u.accessToken);
+    assert.equal(blocked.status, 403);
+    assert.match(blocked.json.error.message, /two-factor/i);
+
+    const skipped = await post('/v1/auth/2fa/skip', { bearer: u.accessToken });
+    assert.equal(skipped.status, 200, JSON.stringify(skipped.json));
+    assert.equal(skipped.json.twoFactorSkipped, true);
+    assert.equal((await get('/v1/auth/sessions', skipped.json.accessToken)).status, 200);
+
+    const refreshed = await post('/v1/auth/refresh', {
+      body: { refreshToken: u.refreshToken },
+    });
+    assert.equal(refreshed.status, 200);
+    assert.equal(refreshed.json.twoFactorSkipped, true);
+    assert.equal((await get('/v1/auth/sessions', refreshed.json.accessToken)).status, 200);
+
+    await post('/v1/auth/logout', { body: { refreshToken: refreshed.json.refreshToken } });
+    const nextLogin = await post('/v1/auth/login', {
+      body: { email: u.email, password: 'correct-horse-battery' },
+    });
+    assert.equal(nextLogin.status, 200);
+    assert.equal(nextLogin.json.twoFactorSkipped, undefined);
+    assert.equal((await get('/v1/auth/sessions', nextLogin.json.accessToken)).status, 403);
+  });
+
   it('bad credentials return 401 invalid_credentials (no enumeration)', async () => {
     const res = await post('/v1/auth/login', {
       body: { email: `ghost-${uniq()}@example.com`, password: 'definitely-wrong-1' },
@@ -267,6 +598,35 @@ describe('HTTP auth + RBAC enforcement', () => {
     assert.equal(ok.json[0].role, 'owner');
   });
 
+  it('member removal revokes workspace sessions and blocks existing access tokens', async () => {
+    const owner = await signup('http-remove-owner');
+    const member = await signup('http-remove-member');
+    const [ownerMembership] = await boot`
+      SELECT workspace_id FROM memberships WHERE user_id = ${owner.id}::uuid
+    `;
+    assert.ok(ownerMembership?.workspace_id, 'owner workspace exists');
+
+    await boot`INSERT INTO memberships (workspace_id, user_id, role)
+      VALUES (${ownerMembership.workspace_id}::uuid, ${member.id}::uuid, 'agent')
+      ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'agent'`;
+    await boot`UPDATE refresh_tokens SET workspace_id = ${ownerMembership.workspace_id}::uuid
+      WHERE user_id = ${member.id}::uuid AND revoked_at IS NULL`;
+
+    const memberSession = await authService.refresh(member.refreshToken);
+    assert.equal(memberSession.workspaceId, ownerMembership.workspace_id);
+    assert.equal(memberSession.role, 'agent');
+
+    const removed = await remove(`/v1/members/${member.id}`, owner.accessToken);
+    assert.equal(removed.status, 200, JSON.stringify(removed.json));
+
+    const denied = await get('/v1/members', memberSession.accessToken);
+    assert.equal(denied.status, 403);
+    const rejectedRefresh = await post('/v1/auth/refresh', {
+      body: { refreshToken: memberSession.refreshToken },
+    });
+    assert.equal(rejectedRefresh.status, 401);
+  });
+
   it('CapabilityGuard denies the agent (403) but allows workspace:read', async () => {
     const b = await signup('http-agent');
     // Demote the member to agent directly (simulates an accepted agent invite
@@ -274,7 +634,11 @@ describe('HTTP auth + RBAC enforcement', () => {
     await boot`UPDATE memberships SET role = 'agent'
                WHERE user_id = (SELECT id FROM users WHERE email = ${b.email}::citext)`;
     const login = await post('/v1/auth/login', {
-      body: { email: b.email, password: 'correct-horse-battery' },
+      body: {
+        email: b.email,
+        password: 'correct-horse-battery',
+        totpCode: authenticator.generate(b.totpSecret!),
+      },
     });
     assert.equal(login.status, 200);
     assert.equal(login.json.role, 'agent', 'JWT now carries role=agent');
@@ -356,6 +720,13 @@ describe('HTTP invitation accept flow', () => {
     assert.ok(accept.json.accessToken, 'session issued on accept');
     const cookie = refreshCookie(accept.setCookies);
     assert.ok(cookie, 'refresh cookie set on accept');
+    const setup = await post('/v1/auth/2fa/setup', { bearer: accept.json.accessToken });
+    assert.equal(setup.status, 200, `invitee 2FA setup should succeed: ${JSON.stringify(setup.json)}`);
+    const enabled = await post('/v1/auth/2fa/verify', {
+      bearer: accept.json.accessToken,
+      body: { code: authenticator.generate(setup.json.secret) },
+    });
+    assert.equal(enabled.status, 200, 'invitee should enable required 2FA before workspace access');
 
     // The new agent's session is scoped to the OWNER's workspace.
     const ws = await get('/v1/workspace', accept.json.accessToken);
@@ -377,7 +748,11 @@ describe('HTTP invitation accept flow', () => {
     const ownerA = await signup('inv-owner2');
     const existing = await signup('inv-existing'); // has its own workspace already
     const existingLogin = await post('/v1/auth/login', {
-      body: { email: existing.email, password: 'correct-horse-battery' },
+      body: {
+        email: existing.email,
+        password: 'correct-horse-battery',
+        totpCode: authenticator.generate(existing.totpSecret!),
+      },
     });
     assert.equal(existingLogin.status, 200);
     const existingTok = existingLogin.json.accessToken as string;
@@ -467,11 +842,15 @@ describe('HTTP audit trail (E.2 regression)', () => {
   });
 
   it('login leaves auth.login', async () => {
-    const { accessToken, email } = await signup('auditlogin');
+    const { accessToken, email, totpSecret } = await signup('auditlogin');
     await waitForAudit(accessToken, 'auth.signup');
 
     const login = await post('/v1/auth/login', {
-      body: { email, password: 'correct-horse-battery' },
+      body: {
+        email,
+        password: 'correct-horse-battery',
+        totpCode: authenticator.generate(totpSecret!),
+      },
     });
     assert.equal(login.status, 200, JSON.stringify(login.json));
     const entry = await waitForAudit(login.json.accessToken, 'auth.login');
@@ -480,7 +859,7 @@ describe('HTTP audit trail (E.2 regression)', () => {
   });
 
   it('2FA enable + disable leave 2fa.enabled / 2fa.disabled', async () => {
-    const { accessToken } = await signup('audittwofa');
+    const { accessToken } = await signup('audittwofa', false);
     const setup = await post('/v1/auth/2fa/setup', { bearer: accessToken });
     assert.equal(setup.status, 200, JSON.stringify(setup.json));
 
@@ -495,6 +874,8 @@ describe('HTTP audit trail (E.2 regression)', () => {
       body: { password: 'correct-horse-battery', code: enable.json.recoveryCodes[0] },
     });
     assert.equal(disable.status, 200, JSON.stringify(disable.json));
+    const skip = await post('/v1/auth/2fa/skip', { bearer: accessToken });
+    assert.equal(skip.status, 200, JSON.stringify(skip.json));
     await waitForAudit(accessToken, '2fa.disabled');
   });
 

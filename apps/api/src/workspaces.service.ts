@@ -1,5 +1,5 @@
-import { eq, and, isNull } from 'drizzle-orm';
-import { memberships, workspaces, invitations, invitationTokens, users, emailTokens } from '@livechat/db';
+import { eq, and, isNull, gt } from 'drizzle-orm';
+import { memberships, workspaces, invitations, invitationTokens, users, refreshTokens } from '@livechat/db';
 import { withTenant, withoutTenant, currentTx, setTenantContext } from '@livechat/db';
 import { sendEmail } from './email.js';
 import {
@@ -14,11 +14,11 @@ import {
   inviteSchema,
   updateRoleSchema,
   INVITATION_TTL_SECONDS,
-  EMAIL_VERIFY_TTL_SECONDS,
   MIN_PASSWORD_LENGTH,
 } from '@livechat/shared';
 import { generateToken, hashToken, hashPassword } from './crypto.js';
 import { authService, type SessionResult } from './auth-service.js';
+import { config } from './config.js';
 
 /**
  * WorkspaceService — team & membership management, fully tenant-scoped.
@@ -30,10 +30,27 @@ function assertCapability(role: Role, capability: Capability) {
   if (!roleCan(role, capability)) throw forbidden('Insufficient role for this action');
 }
 
+function memberRole(value: string): Role {
+  if (value === 'owner' || value === 'admin' || value === 'agent') return value;
+  throw new Error(`Invalid stored workspace role: ${value}`);
+}
+
 export interface MemberView {
   userId: string;
-  role: string;
+  name: string | null;
+  email: string;
+  role: Role;
   createdAt: Date;
+}
+
+export interface InvitationView {
+  id: string;
+  email: string;
+  role: Role;
+  status: 'pending' | 'expired' | 'accepted';
+  createdAt: Date;
+  expiresAt: Date;
+  acceptedAt: Date | null;
 }
 
 export const workspaceService = {
@@ -52,8 +69,39 @@ export const workspaceService = {
     assertCapability(role, 'members:read');
     return withTenant(process.env.DATABASE_URL!, workspaceId, async () => {
       const tx = currentTx();
-      const rows = await tx.select().from(memberships);
-      return rows.map((m) => ({ userId: m.userId, role: m.role, createdAt: m.createdAt }));
+      const rows = await tx
+        .select({
+          userId: memberships.userId,
+          name: users.name,
+          email: users.email,
+          role: memberships.role,
+          createdAt: memberships.createdAt,
+        })
+        .from(memberships)
+        .innerJoin(users, eq(users.id, memberships.userId));
+      return rows.map((member) => ({ ...member, role: memberRole(member.role) }));
+    });
+  },
+
+  async listInvitations(workspaceId: string, role: Role): Promise<InvitationView[]> {
+    assertCapability(role, 'members:read');
+    return withTenant(process.env.DATABASE_URL!, workspaceId, async () => {
+      const tx = currentTx();
+      const rows = await tx.select().from(invitations);
+      const now = Date.now();
+      return rows.map((inv) => ({
+        id: inv.id,
+        email: inv.email,
+        role: memberRole(inv.role),
+        status: inv.acceptedAt
+          ? 'accepted'
+          : inv.expiresAt.getTime() <= now
+            ? 'expired'
+            : 'pending',
+        createdAt: inv.createdAt,
+        expiresAt: inv.expiresAt,
+        acceptedAt: inv.acceptedAt,
+      }));
     });
   },
 
@@ -65,17 +113,31 @@ export const workspaceService = {
     workspaceId: string,
     role: Role,
     body: unknown,
-  ): Promise<{ invitationId: string; token: string }> {
+  ): Promise<{ invitationId: string; token: string; inviteUrl: string }> {
     assertCapability(role, 'members:invite');
     const input = inviteSchema.parse(body);
     if (input.role === 'owner') throw forbidden('Cannot invite another owner');
 
     return withTenant(process.env.DATABASE_URL!, workspaceId, async () => {
       const tx = currentTx();
+      const [existingUser] = await tx.select().from(users).where(eq(users.email, input.email));
+      if (existingUser) {
+        const [existingMembership] = await tx
+          .select({ userId: memberships.userId })
+          .from(memberships)
+          .where(eq(memberships.userId, existingUser.id));
+        if (existingMembership) throw conflict('This user is already a workspace member');
+      }
       const existing = await tx
         .select()
         .from(invitations)
-        .where(and(eq(invitations.email, input.email), isNull(invitations.acceptedAt)));
+        .where(
+          and(
+            eq(invitations.email, input.email),
+            isNull(invitations.acceptedAt),
+            gt(invitations.expiresAt, new Date()),
+          ),
+        );
       if (existing.length > 0) throw conflict('An active invitation already exists');
 
       const token = generateToken();
@@ -97,14 +159,33 @@ export const workspaceService = {
         invitationId: inv.id,
         workspaceId,
       });
+      const appOrigin = (config.publicAppOrigin ?? 'http://localhost:3000').replace(/\/+$/, '');
+      const inviteUrl = `${appOrigin}/invite/${encodeURIComponent(token)}`;
       await sendEmail({
         to: input.email,
         subject: "You've been invited",
-        text: `Join the workspace with this invite token: ${token}`,
+        text: `Accept your workspace invitation: ${inviteUrl}`,
+        html: `<p>You have been invited to join a workspace.</p><p><a href="${inviteUrl}">Accept invitation</a></p>`,
         devMarker: '[email:invite]',
         devToken: token,
       });
-      return { invitationId: inv.id, token };
+      return { invitationId: inv.id, token, inviteUrl };
+    });
+  },
+
+  async cancelInvitation(workspaceId: string, role: Role, invitationId: string): Promise<{ ok: true }> {
+    assertCapability(role, 'members:invite');
+    return withTenant(process.env.DATABASE_URL!, workspaceId, async () => {
+      const tx = currentTx();
+      const [inv] = await tx
+        .select()
+        .from(invitations)
+        .where(and(eq(invitations.id, invitationId), eq(invitations.workspaceId, workspaceId)));
+      if (!inv) throw notFound('Invitation not found');
+      if (inv.acceptedAt) throw conflict('Accepted invitations cannot be cancelled');
+      await tx.delete(invitationTokens).where(eq(invitationTokens.tokenHash, inv.tokenHash));
+      await tx.delete(invitations).where(eq(invitations.id, invitationId));
+      return { ok: true as const };
     });
   },
 
@@ -196,25 +277,12 @@ export const workspaceService = {
         const passwordHash = await hashPassword(input.password);
         const [created] = await tx
           .insert(users)
-          .values({ email: inv.email, passwordHash, name: input.name })
+          .values({ email: inv.email, passwordHash, name: input.name, emailVerifiedAt: new Date() })
           .returning();
         if (!created) throw conflict('Failed to create account');
         user = created;
-        // Same verification email as signup (dev: logged to console).
-        const verifyToken = generateToken();
-        await tx.insert(emailTokens).values({
-          userId: user.id,
-          type: 'verify',
-          tokenHash: hashToken(verifyToken),
-          expiresAt: new Date(Date.now() + EMAIL_VERIFY_TTL_SECONDS * 1000),
-        });
-        await sendEmail({
-          to: user.email,
-          subject: 'Verify your email',
-          text: `Verify your account with this code: ${verifyToken}`,
-          devMarker: '[email:verify]',
-          devToken: verifyToken,
-        });
+        // The single-use invitation link was delivered to this address and
+        // proves mailbox access, so accepting it also verifies the account.
       }
 
       // Membership (idempotent: already a member — e.g. re-invited owner —
@@ -280,6 +348,14 @@ export const workspaceService = {
       await tx
         .delete(memberships)
         .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, targetUserId)));
+      await tx
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(
+          eq(refreshTokens.workspaceId, workspaceId),
+          eq(refreshTokens.userId, targetUserId),
+          isNull(refreshTokens.revokedAt),
+        ));
       return { ok: true as const };
     });
   },

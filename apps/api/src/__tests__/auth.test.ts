@@ -1,8 +1,10 @@
 import '../load-env.js';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 import postgres from 'postgres';
 import { authService } from '../auth-service.js';
+import { hashToken } from '../crypto.js';
 import { closeDb } from '@livechat/db';
 
 /**
@@ -14,10 +16,15 @@ import { closeDb } from '@livechat/db';
 // authService reads process.env.DATABASE_URL at call time — point it at the
 // TEST database so unit tests never create rows in dev.
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+process.env.EMAIL_PROVIDER = 'console';
 
 const BOOT_URL = process.env.BOOTSTRAP_DATABASE_URL!.replace(/\/[^/]+$/, '/livechat_test');
 let boot: ReturnType<typeof postgres>;
-const created: { userIds: string[]; emails: string[] } = { userIds: [], emails: [] };
+const created: { userIds: string[]; emails: string[]; workspaceIds: string[] } = {
+  userIds: [],
+  emails: [],
+  workspaceIds: [],
+};
 
 const uniq = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -32,6 +39,9 @@ after(async () => {
   // Clean up created users (cascade removes their refresh/email tokens).
   for (const email of created.emails) {
     await boot`DELETE FROM users WHERE email = ${email}::citext`;
+  }
+  for (const workspaceId of created.workspaceIds) {
+    await boot`DELETE FROM workspaces WHERE id = ${workspaceId}::uuid`;
   }
   await boot.end();
   await closeDb();
@@ -61,7 +71,37 @@ async function captureEmailToken(p: Promise<unknown>, marker: string): Promise<s
   return captured[captured.length - 1];
 }
 
+async function verifyAccount(email: string): Promise<void> {
+  const token = await captureEmailToken(
+    authService.resendVerification(email),
+    '[email:verify]',
+  );
+  assert.ok(token, 'verification email was sent');
+  await authService.verifyEmail(token);
+}
+
 describe('Auth flows', () => {
+  it('Google login creates a verified account and reuses the linked identity', async () => {
+    const email = `google-${uniq()}@example.com`;
+    created.emails.push(email);
+    const identity = {
+      subject: `google-sub-${uniq()}`,
+      email,
+      name: 'Google User',
+    };
+
+    const createdSession = await authService.loginWithGoogle(identity);
+    assert.ok('accessToken' in createdSession);
+    assert.ok(createdSession.user.emailVerifiedAt);
+    assert.equal(createdSession.user.name, identity.name);
+    assert.equal(createdSession.role, 'owner');
+
+    const returningSession = await authService.loginWithGoogle(identity);
+    assert.ok('accessToken' in returningSession);
+    assert.equal(returningSession.user.id, createdSession.user.id);
+    assert.equal(returningSession.workspaceId, createdSession.workspaceId);
+  });
+
   it('signup creates user + workspace + owner membership and returns a session', async () => {
     const email = `signup-${uniq()}@example.com`;
     created.emails.push(email);
@@ -93,6 +133,12 @@ describe('Auth flows', () => {
     created.emails.push(email);
     await authService.signup({ email, password: 'correct-horse-battery', name: 'L', workspaceName: 'WL' });
 
+    await assert.rejects(
+      () => authService.login({ email, password: 'correct-horse-battery' }),
+      /verify your email/,
+      'unverified accounts cannot sign in',
+    );
+    await verifyAccount(email);
     const ok = await authService.login({ email, password: 'correct-horse-battery' });
     assert.ok('accessToken' in ok, 'login returns a session');
 
@@ -107,6 +153,7 @@ describe('Auth flows', () => {
     created.emails.push(email);
     const s = await authService.signup({ email, password: 'correct-horse-battery', name: 'R', workspaceName: 'WR' });
 
+    await verifyAccount(email);
     const r2 = await authService.refresh(s.refreshToken);
     assert.ok(r2.accessToken, 'new access token');
     assert.notEqual(r2.refreshToken, s.refreshToken, 'refresh token rotated');
@@ -121,6 +168,7 @@ describe('Auth flows', () => {
     created.emails.push(email);
     const s = await authService.signup({ email, password: 'correct-horse-battery', name: 'RU', workspaceName: 'WRU' });
 
+    await verifyAccount(email);
     const r2 = await authService.refresh(s.refreshToken);
     // Present the OLD token again -> must be detected as reuse and rejected.
     await assert.rejects(() => authService.refresh(s.refreshToken), /reuse detected/);
@@ -132,6 +180,7 @@ describe('Auth flows', () => {
     const email = `lock-${uniq()}@example.com`;
     created.emails.push(email);
     await authService.signup({ email, password: 'correct-horse-battery', name: 'LK', workspaceName: 'WLK' });
+    await verifyAccount(email);
 
     for (let i = 0; i < 8; i++) {
       await assert.rejects(() => authService.login({ email, password: 'bad-password' }));
@@ -153,6 +202,7 @@ describe('Auth flows', () => {
       workspaceName: 'WLO',
     });
 
+    await verifyAccount(email);
     await authService.logout(s.refreshToken);
     // The revoked token must no longer work (server-side, not just cookie).
     await assert.rejects(() => authService.refresh(s.refreshToken), /revoked|Invalid/);
@@ -176,7 +226,7 @@ describe('Auth flows', () => {
     assert.ok('accessToken' in login);
     assert.ok(login.user.emailVerifiedAt, 'emailVerifiedAt set after verify');
 
-    await assert.rejects(() => authService.verifyEmail(token), /Invalid or expired/);
+    await authService.verifyEmail(token);
   });
 
   it('resend-verification rotates the token (old link dies) — no enumeration otherwise', async () => {
@@ -207,6 +257,11 @@ describe('Auth flows', () => {
   it('password reset switches the password and revokes all sessions', async () => {
     const email = `reset-${uniq()}@example.com`;
     created.emails.push(email);
+    assert.equal(
+      await authService.forgotPassword(`missing-${uniq()}@example.com`),
+      false,
+      'unknown emails are reported as not found',
+    );
     const s = await authService.signup({
       email,
       password: 'correct-horse-battery',
@@ -214,8 +269,16 @@ describe('Auth flows', () => {
       workspaceName: 'WP',
     });
 
+    await verifyAccount(email);
+    const staleResetToken = await captureEmailToken(authService.forgotPassword(email), '[email:reset]');
+    assert.ok(staleResetToken, 'dev mailer logged the first reset token');
     const resetToken = await captureEmailToken(authService.forgotPassword(email), '[email:reset]');
-    assert.ok(resetToken, 'dev mailer logged a reset token');
+    assert.ok(resetToken, 'dev mailer logged the replacement reset token');
+    await assert.rejects(
+      () => authService.resetPassword(staleResetToken, 'another-brand-new-password'),
+      /Invalid or expired/,
+      'requesting a new reset link invalidates the old one',
+    );
     await authService.resetPassword(resetToken, 'a-brand-new-password');
 
     const login = await authService.login({ email, password: 'a-brand-new-password' });
@@ -230,9 +293,133 @@ describe('Auth flows', () => {
     // Reset tokens are single-use.
     await assert.rejects(() => authService.resetPassword(resetToken, 'another-password'), /Invalid or expired/);
   });
+
+  it('updates profile details, verifies email changes, records session location, and changes password', async () => {
+    const email = `profile-${uniq()}@example.com`;
+    const nextEmail = `profile-next-${uniq()}@example.com`;
+    created.emails.push(email, nextEmail);
+    const signup = await authService.signup({
+      email,
+      password: 'correct-horse-battery',
+      name: 'Profile User',
+      workspaceName: 'Profile Workspace',
+    });
+    await verifyAccount(email);
+
+    const updated = await authService.updateProfile(signup.user.id, {
+      name: 'Updated Profile',
+      phone: '+1 555 0100',
+    });
+    assert.equal(updated.name, 'Updated Profile');
+    assert.equal(updated.phone, '+1 555 0100');
+    const imageData = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=';
+    const uploadedAvatar = await authService.uploadAvatar(signup.user.id, { mimeType: 'image/jpeg', imageData });
+    assert.match(uploadedAvatar.avatarUrl, new RegExp(`^/v1/auth/avatar/${signup.user.id}\\?v=`));
+    const savedAvatar = await authService.getAvatar(signup.user.id);
+    assert.equal(savedAvatar.mimeType, 'image/jpeg');
+    assert.deepEqual(savedAvatar.data, Buffer.from(imageData, 'base64'));
+    await authService.deleteAvatar(signup.user.id);
+    await assert.rejects(() => authService.getAvatar(signup.user.id), /Profile photo not found/);
+
+    await assert.rejects(
+      () => authService.requestEmailChange(signup.user.id, nextEmail, 'wrong-password'),
+      /Invalid email or password/,
+    );
+    const emailToken = await captureEmailToken(
+      authService.requestEmailChange(signup.user.id, nextEmail, 'correct-horse-battery'),
+      '[email:change]',
+    );
+    assert.ok(emailToken, 'email-change verification token was sent');
+    assert.equal((await authService.getProfile(signup.user.id)).pendingEmail, nextEmail);
+    await authService.verifyEmail(emailToken);
+    assert.equal((await authService.getProfile(signup.user.id)).email, nextEmail);
+
+    const login = await authService.login({
+      email: nextEmail,
+      password: 'correct-horse-battery',
+      location: 'Toronto, Ontario, CA',
+    });
+    assert.ok('accessToken' in login);
+    const sessions = await authService.listSessions(signup.user.id, login.refreshToken);
+    const current = sessions.find((session) => session.current);
+    assert.equal(current?.location, 'Toronto, Ontario, CA');
+
+    await authService.changePassword(
+      signup.user.id,
+      current!.id,
+      'correct-horse-battery',
+      'a-brand-new-password',
+    );
+    assert.ok((await authService.refresh(login.refreshToken)).accessToken, 'current session remains active');
+    await assert.rejects(() => authService.refresh(signup.refreshToken), /Invalid|revoked|reuse/);
+    assert.ok(
+      'accessToken' in await authService.login({ email: nextEmail, password: 'a-brand-new-password' }),
+      'new password works',
+    );
+  });
 });
 
 describe('Two-factor auth + session management', () => {
+  it('refresh and 2FA skip use the workspace membership for the current session', async () => {
+    const email = `workspace-role-${uniq()}@example.com`;
+    created.emails.push(email);
+    const session = await authService.signup({
+      email,
+      password: 'correct-horse-battery',
+      name: 'Workspace Role',
+      workspaceName: 'Workspace Role Home',
+    });
+    await verifyAccount(email);
+
+    const targetWorkspaceId = randomUUID();
+    created.workspaceIds.push(targetWorkspaceId);
+    await boot`INSERT INTO workspaces (id, name, slug)
+      VALUES (${targetWorkspaceId}::uuid, 'Workspace Role Target', ${`workspace-role-${uniq()}`})`;
+    await boot`INSERT INTO memberships (workspace_id, user_id, role)
+      VALUES (${targetWorkspaceId}::uuid, ${session.user.id}::uuid, 'agent')`;
+    const sessionId = await boot`
+      SELECT family_id FROM refresh_tokens
+      WHERE user_id = ${session.user.id}::uuid
+        AND token_hash = ${hashToken(session.refreshToken)}
+    `;
+    assert.equal(sessionId.length, 1, 'signup session is found by its refresh token hash');
+    await boot`UPDATE refresh_tokens
+      SET workspace_id = ${targetWorkspaceId}::uuid
+      WHERE family_id = ${sessionId[0]!.family_id}::uuid`;
+
+    const refreshed = await authService.refresh(session.refreshToken);
+    assert.equal(refreshed.workspaceId, targetWorkspaceId);
+    assert.equal(refreshed.role, 'agent');
+
+    const skipped = await authService.skipTwoFactorForSession(session.user.id, sessionId[0]!.family_id);
+    assert.equal(skipped.workspaceId, targetWorkspaceId);
+    assert.equal(skipped.role, 'agent');
+  });
+
+  it('Google sign-in preserves the existing second-factor challenge', async () => {
+    const email = `google-2fa-${uniq()}@example.com`;
+    created.emails.push(email);
+    const identity = {
+      subject: `google-sub-${uniq()}`,
+      email,
+      name: 'Google Two Factor',
+    };
+    const session = await authService.loginWithGoogle(identity);
+    assert.ok('accessToken' in session);
+
+    const { authenticator } = await import('otplib');
+    const setup = await authService.setup2fa(session.user.id);
+    await authService.enable2fa(session.user.id, authenticator.generate(setup.secret));
+
+    const challenge = await authService.loginWithGoogle(identity);
+    assert.ok('requires2fa' in challenge && challenge.requires2fa);
+    const completed = await authService.completeTwoFactorLogin({
+      tempToken: challenge.tempToken,
+      code: authenticator.generate(setup.secret),
+    });
+    assert.ok('accessToken' in completed);
+  });
+
   it('setup → enable → login (TOTP + one-time recovery codes) → disable', async () => {
     const email = `2fa-${uniq()}@example.com`;
     created.emails.push(email);
@@ -242,6 +429,7 @@ describe('Two-factor auth + session management', () => {
       name: 'T',
       workspaceName: 'WT',
     });
+    await verifyAccount(email);
     const userId = s.user.id;
     const { authenticator } = await import('otplib');
 
@@ -331,6 +519,7 @@ describe('Two-factor auth + session management', () => {
       name: 'S',
       workspaceName: 'WSess',
     });
+    await verifyAccount(email);
     const userId = s1.user.id;
 
     // A second "device": login again → second refresh-token family.
@@ -368,4 +557,3 @@ describe('Two-factor auth + session management', () => {
     );
   });
 });
-

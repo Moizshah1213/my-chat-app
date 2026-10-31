@@ -17,6 +17,10 @@ export const config = {
     issuer: env.JWT_ISSUER,
     audience: env.JWT_AUDIENCE,
   },
+  googleOAuthClientIds: (env.GOOGLE_OAUTH_CLIENT_IDS ?? '')
+    .split(',')
+    .map((clientId) => clientId.trim())
+    .filter(Boolean),
   cookie: {
     domain: env.COOKIE_DOMAIN,
     secure: env.COOKIE_SECURE,

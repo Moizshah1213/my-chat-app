@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql, desc } from 'drizzle-orm';
 import {
   conversations,
+  conversationNotificationPreferences,
   messages,
   visitors,
   memberships,
@@ -16,6 +17,8 @@ import {
   AppError,
   listConversationsSchema,
   listMessagesSchema,
+  editMessageSchema,
+  conversationNotificationPreferenceSchema,
   sendMessageSchema,
   updateConversationSchema,
   type Role,
@@ -27,6 +30,8 @@ import {
 } from '@livechat/shared';
 import { parse } from './validation.js';
 import { emitToConversation, emitToWorkspace } from './realtime.js';
+import { triggerAiReply } from './ai-reply.js';
+import { notificationsService } from './notifications.service.js';
 
 /**
  * ConversationService — agent inbox + messaging (blueprint §6/§9).
@@ -71,6 +76,8 @@ export interface ConversationView {
   subject: string | null;
   closedAt: Date | null;
   lastMessageAt: Date;
+  lastMessagePreview?: string | null;
+  lastMessageSenderType?: string | null;
   createdAt: Date;
   visitor: { id: string | null; name: string | null; email: string | null };
 }
@@ -83,6 +90,7 @@ export interface MessageView {
   body: string;
   bodyType: string;
   createdAt: Date;
+  editedAt?: Date | null;
 }
 
 const CONVERSATION_SELECT = {
@@ -92,6 +100,24 @@ const CONVERSATION_SELECT = {
   subject: conversations.subject,
   closedAt: conversations.closedAt,
   lastMessageAt: conversations.lastMessageAt,
+  lastMessagePreview: sql<string | null>`(
+    SELECT left(m.body, 180)
+    FROM messages m
+    WHERE m.workspace_id = conversations.workspace_id
+      AND m.conversation_id = conversations.id
+      AND m.deleted_at IS NULL
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT 1
+  )`.as('lastMessagePreview'),
+  lastMessageSenderType: sql<string | null>`(
+    SELECT m.sender_type
+    FROM messages m
+    WHERE m.workspace_id = conversations.workspace_id
+      AND m.conversation_id = conversations.id
+      AND m.deleted_at IS NULL
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT 1
+  )`.as('lastMessageSenderType'),
   createdAt: conversations.createdAt,
   visitorId: visitors.id,
   visitorName: visitors.name,
@@ -106,6 +132,8 @@ function toConversationView(row: any): ConversationView {
     subject: row.subject,
     closedAt: row.closedAt,
     lastMessageAt: row.lastMessageAt,
+    lastMessagePreview: row.lastMessagePreview ?? null,
+    lastMessageSenderType: row.lastMessageSenderType ?? null,
     createdAt: row.createdAt,
     visitor: { id: row.visitorId ?? null, name: row.visitorName ?? null, email: row.visitorEmail ?? null },
   };
@@ -120,6 +148,7 @@ function toMessageView(row: any): MessageView {
     body: row.body,
     bodyType: row.bodyType,
     createdAt: row.createdAt,
+    editedAt: row.editedAt ?? null,
   };
 }
 
@@ -132,7 +161,7 @@ export const conversationService = {
 
     return withTenant(DB_URL(), workspaceId, async () => {
       const tx = currentTx();
-      const conds = [eq(conversations.workspaceId, workspaceId)];
+      const conds = [eq(conversations.workspaceId, workspaceId), isNull(conversations.deletedAt)];
       if (q.status) conds.push(eq(conversations.status, q.status));
       if (q.assignee === 'me') conds.push(eq(conversations.assignedTo, userId));
       if (q.assignee === 'unassigned') conds.push(isNull(conversations.assignedTo));
@@ -172,7 +201,11 @@ export const conversationService = {
         .select(CONVERSATION_SELECT)
         .from(conversations)
         .leftJoin(visitors, eq(conversations.visitorId, visitors.id))
-        .where(and(eq(conversations.workspaceId, workspaceId), eq(conversations.id, conversationId)))
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
         .limit(1);
       if (!rows[0]) throw notFound('Conversation not found');
       return toConversationView(rows[0]);
@@ -194,7 +227,12 @@ export const conversationService = {
       const [conv] = await tx
         .select()
         .from(conversations)
-        .where(and(eq(conversations.workspaceId, workspaceId), eq(conversations.id, conversationId)))
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .for('update')
         .limit(1);
       if (!conv) throw notFound('Conversation not found');
 
@@ -250,6 +288,113 @@ export const conversationService = {
     return view;
   },
 
+  async delete(workspaceId: string, role: Role, conversationId: string) {
+    assertCapability(role, 'conversations:write');
+    assertId(conversationId);
+    const [deleted] = await withTenant(DB_URL(), workspaceId, async () => {
+      const tx = currentTx();
+      return tx
+        .update(conversations)
+        .set({ deletedAt: new Date() })
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .returning({ id: conversations.id });
+    });
+    if (!deleted) throw notFound('Conversation not found');
+    const event = { conversationId };
+    emitToWorkspace(workspaceId, 'conversation:deleted', event);
+    emitToWorkspace(workspaceId, 'conversation:updated', event);
+    emitToConversation(conversationId, 'conversation:deleted', event);
+    return { ok: true as const };
+  },
+
+  async getNotificationPreference(workspaceId: string, role: Role, userId: string, conversationId: string) {
+    assertCapability(role, 'conversations:read');
+    assertId(conversationId);
+    return withTenant(DB_URL(), workspaceId, async () => {
+      const tx = currentTx();
+      const [activeConversation] = await tx
+        .select({ id: conversations.id, createdAt: conversations.createdAt })
+        .from(conversations)
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .limit(1);
+      if (!activeConversation) throw notFound('Conversation not found');
+      const [preference] = await tx
+        .select({ paused: conversationNotificationPreferences.paused })
+        .from(conversationNotificationPreferences)
+        .where(and(
+          eq(conversationNotificationPreferences.workspaceId, workspaceId),
+          eq(conversationNotificationPreferences.conversationId, conversationId),
+          eq(conversationNotificationPreferences.userId, userId),
+        ))
+        .limit(1);
+      return { paused: preference?.paused ?? false };
+    });
+  },
+
+  async listNotificationPreferences(workspaceId: string, role: Role, userId: string) {
+    assertCapability(role, 'conversations:read');
+    return withTenant(DB_URL(), workspaceId, async () => {
+      const rows = await currentTx()
+        .select({ conversationId: conversationNotificationPreferences.conversationId })
+        .from(conversationNotificationPreferences)
+        .where(and(
+          eq(conversationNotificationPreferences.workspaceId, workspaceId),
+          eq(conversationNotificationPreferences.userId, userId),
+          eq(conversationNotificationPreferences.paused, true),
+        ));
+      return { conversationIds: rows.map((row) => row.conversationId) };
+    });
+  },
+
+  async updateNotificationPreference(workspaceId: string, role: Role, userId: string, conversationId: string, body: unknown) {
+    assertCapability(role, 'conversations:write');
+    assertId(conversationId);
+    const { paused } = parse(conversationNotificationPreferenceSchema, body);
+    return withTenant(DB_URL(), workspaceId, async () => {
+      const tx = currentTx();
+      const [conversation] = await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .limit(1);
+      if (!conversation) throw notFound('Conversation not found');
+
+      const preference = and(
+        eq(conversationNotificationPreferences.workspaceId, workspaceId),
+        eq(conversationNotificationPreferences.conversationId, conversationId),
+        eq(conversationNotificationPreferences.userId, userId),
+      );
+      if (paused) {
+        await tx
+          .insert(conversationNotificationPreferences)
+          .values({ workspaceId, conversationId, userId, paused: true })
+          .onConflictDoUpdate({
+            target: [
+              conversationNotificationPreferences.workspaceId,
+              conversationNotificationPreferences.conversationId,
+              conversationNotificationPreferences.userId,
+            ],
+            set: { paused: true, updatedAt: new Date() },
+          });
+      } else {
+        await tx.delete(conversationNotificationPreferences).where(preference);
+      }
+      return { paused };
+    });
+  },
+
   /** Message history for one conversation (newest page, older via `before`). */
   async listMessages(
     workspaceId: string,
@@ -267,7 +412,11 @@ export const conversationService = {
       const [conv] = await tx
         .select({ id: conversations.id })
         .from(conversations)
-        .where(and(eq(conversations.workspaceId, workspaceId), eq(conversations.id, conversationId)))
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
         .limit(1);
       if (!conv) throw notFound('Conversation not found');
 
@@ -320,7 +469,12 @@ export const conversationService = {
       const [conv] = await tx
         .select()
         .from(conversations)
-        .where(and(eq(conversations.workspaceId, workspaceId), eq(conversations.id, conversationId)))
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .for('update')
         .limit(1);
       if (!conv) throw notFound('Conversation not found');
       if (conv.status === 'closed') throw badRequest('Conversation is closed');
@@ -334,7 +488,121 @@ export const conversationService = {
     });
 
     fanOutMessage(workspaceId, conversationId, result.view);
+    void notificationsService.notifyAgentReply(
+      workspaceId,
+      conversationId,
+      userId,
+      `${conversationId}:${result.view.createdAt.toISOString()}`,
+    ).catch((error: unknown) => {
+      console.error('[push] Could not notify mobile devices about an agent reply:', error);
+    });
     return result.view;
+  },
+
+  async editMessage(
+    workspaceId: string,
+    role: Role,
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    body: unknown,
+  ): Promise<MessageView> {
+    assertCapability(role, 'conversations:write');
+    assertId(conversationId);
+    assertId(messageId);
+    const input = parse(editMessageSchema, body);
+    const updated = await withTenant(DB_URL(), workspaceId, async () => {
+      const tx = currentTx();
+      const [conversation] = await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .limit(1);
+      if (!conversation) throw notFound('Conversation not found');
+      const [row] = await tx
+        .update(messages)
+        .set({ body: input.body, editedAt: new Date() })
+        .where(and(
+          eq(messages.workspaceId, workspaceId),
+          eq(messages.conversationId, conversationId),
+          eq(messages.id, messageId),
+          eq(messages.senderType, 'agent'),
+          eq(messages.senderId, userId),
+          isNull(messages.deletedAt),
+        ))
+        .returning();
+      return row;
+    });
+    if (!updated) throw notFound('Message not found');
+    const view = toMessageView(updated);
+    emitToConversation(conversationId, 'message:updated', view);
+    emitToWorkspace(workspaceId, 'message:updated', view);
+    emitToWorkspace(workspaceId, 'conversation:updated', { conversationId });
+    return view;
+  },
+
+  async deleteMessage(
+    workspaceId: string,
+    role: Role,
+    userId: string,
+    conversationId: string,
+    messageId: string,
+  ) {
+    assertCapability(role, 'conversations:write');
+    assertId(conversationId);
+    assertId(messageId);
+    const result = await withTenant(DB_URL(), workspaceId, async () => {
+      const tx = currentTx();
+      const [activeConversation] = await tx
+        .select({ id: conversations.id, createdAt: conversations.createdAt })
+        .from(conversations)
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .limit(1);
+      if (!activeConversation) throw notFound('Conversation not found');
+      const [deleted] = await tx
+        .update(messages)
+        .set({ deletedAt: new Date() })
+        .where(and(
+          eq(messages.workspaceId, workspaceId),
+          eq(messages.conversationId, conversationId),
+          eq(messages.id, messageId),
+          eq(messages.senderType, 'agent'),
+          eq(messages.senderId, userId),
+          isNull(messages.deletedAt),
+        ))
+        .returning({ id: messages.id });
+      if (!deleted) return null;
+
+      const [latest] = await tx
+        .select({ createdAt: messages.createdAt })
+        .from(messages)
+        .where(and(
+          eq(messages.workspaceId, workspaceId),
+          eq(messages.conversationId, conversationId),
+          isNull(messages.deletedAt),
+        ))
+        .orderBy(desc(messages.createdAt), desc(messages.id))
+        .limit(1);
+      await tx
+        .update(conversations)
+        .set({ lastMessageAt: latest?.createdAt ?? activeConversation.createdAt })
+        .where(and(eq(conversations.id, conversationId), isNull(conversations.deletedAt)));
+      return { id: deleted.id, lastMessageAt: latest?.createdAt ?? activeConversation.createdAt };
+    });
+    if (!result) throw notFound('Message not found');
+    const event = { conversationId, messageId, lastMessageAt: result.lastMessageAt };
+    emitToConversation(conversationId, 'message:deleted', event);
+    emitToWorkspace(workspaceId, 'message:deleted', event);
+    emitToWorkspace(workspaceId, 'conversation:updated', event);
+    return { ok: true as const };
   },
 
   /**
@@ -342,6 +610,9 @@ export const conversationService = {
    * own the conversation (checked server-side) and it must be open — a closed
    * conversation gets a NEW conversation via visitor_init, never reopened
    * silently.
+   *
+   * After persisting the message, AI auto-reply is triggered asynchronously
+   * (fire-and-forget) — it will reply only in auto mode if no human responds.
    */
   async visitorSend(
     workspaceId: string,
@@ -357,7 +628,12 @@ export const conversationService = {
       const [conv] = await tx
         .select()
         .from(conversations)
-        .where(and(eq(conversations.workspaceId, workspaceId), eq(conversations.id, conversationId)))
+        .where(and(
+          eq(conversations.workspaceId, workspaceId),
+          eq(conversations.id, conversationId),
+          isNull(conversations.deletedAt),
+        ))
+        .for('update')
         .limit(1);
       // Same 404 for "missing" and "not yours" — no cross-tenant existence leak.
       if (!conv || conv.visitorId !== visitorId) throw notFound('Conversation not found');
@@ -372,6 +648,20 @@ export const conversationService = {
     });
 
     fanOutMessage(workspaceId, conversationId, result.view);
+
+    void notificationsService.notifyVisitorMessage(
+      workspaceId,
+      conversationId,
+      `${conversationId}:${result.view.createdAt.toISOString()}`,
+    ).catch((error: unknown) => {
+      console.error('[push] Could not notify mobile devices about a visitor message:', error);
+    });
+
+    // Fire-and-forget: defer AI until a human has had time to answer.
+    // Runs after the visitor's response is already on its way back — never
+    // blocks or fails the visitor send even if the LLM is down.
+    void triggerAiReply(workspaceId, conversationId, result.view.id);
+
     return result.view;
   },
 };
@@ -426,5 +716,7 @@ function fanOutMessage(workspaceId: string, conversationId: string, message: Mes
   emitToWorkspace(workspaceId, 'conversation:updated', {
     conversationId,
     lastMessageAt: message.createdAt,
+    lastMessageSenderType: message.senderType,
+    lastMessageSenderId: message.senderId,
   });
 }

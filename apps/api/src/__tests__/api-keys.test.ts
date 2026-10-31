@@ -7,21 +7,24 @@ import postgres from 'postgres';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { authenticator } from 'otplib';
 import { AppModule } from '../app.module.js';
 import { resetRateLimits } from '../rate-limit.js';
+import { workspaceIdFromPublicKey } from '../api-keys.service.js';
 import { closeDb } from '@livechat/db';
 
 /**
  * Phase 3 — API keys suite (blueprint §7.3).
  *
  * Boots the REAL Nest app (guards, filter, controllers) against the TEST
- * database. Covers key minting (pk_ format, secret never returned), listing,
+ * database. Covers key minting (qvse_ format, secret never returned), listing,
  * RBAC (owner/admin only), revocation (idempotent, last-used tracking),
  * cross-tenant isolation, and the public key-resolution path used by the
  * widget endpoints (visitor_init, settings fetch).
  */
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+process.env.EMAIL_PROVIDER = 'console';
 
 const BOOT_URL = process.env.BOOTSTRAP_DATABASE_URL!.replace(/\/[^/]+$/, '/livechat_test');
 let boot: ReturnType<typeof postgres>;
@@ -76,18 +79,43 @@ const del = (path: string, bearer?: string) => request(path, { method: 'DELETE',
 async function signup(label: string): Promise<Account> {
   const email = `${label}-${uniq()}@example.com`;
   createdEmails.push(email);
-  const res = await post('/v1/auth/signup', {
-    email,
-    password: 'correct-horse-battery',
-    name: label,
-    workspaceName: `${label} WS`,
-  });
+  const loggedTokens: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    const line = String(args[0] ?? '');
+    if (line.startsWith('[email:verify]')) loggedTokens.push(line.split('-> ')[1]?.trim() ?? '');
+    originalLog.apply(console, args as []);
+  };
+  let res: HttpResult;
+  try {
+    res = await post('/v1/auth/signup', {
+      email,
+      password: 'correct-horse-battery',
+      name: label,
+      workspaceName: `${label} WS`,
+    });
+  } finally {
+    console.log = originalLog;
+  }
   assert.equal(res.status, 200, `signup should succeed: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.requiresEmailVerification, true);
+  const verified = await post('/v1/auth/verify-email', { token: loggedTokens[0] });
+  assert.equal(verified.status, 200, 'verification link should verify the account');
+  const login = await post('/v1/auth/login', { email, password: 'correct-horse-battery' });
+  assert.equal(login.status, 200, 'verified account should sign in');
+  const setup = await post('/v1/auth/2fa/setup', {}, login.json.accessToken);
+  assert.equal(setup.status, 200, 'test account should be able to start 2FA setup');
+  const enabled = await post(
+    '/v1/auth/2fa/verify',
+    { code: authenticator.generate(setup.json.secret) },
+    login.json.accessToken,
+  );
+  assert.equal(enabled.status, 200, 'test account should enable required 2FA');
   return {
     email,
-    accessToken: res.json.accessToken,
-    workspaceId: res.json.workspaceId,
-    userId: res.json.user.id,
+    accessToken: login.json.accessToken,
+    workspaceId: login.json.workspaceId,
+    userId: login.json.user.id,
   };
 }
 
@@ -107,6 +135,14 @@ async function createAgent(label: string): Promise<Account> {
   });
   assert.equal(res.status, 200, `accept should succeed: ${JSON.stringify(res.json)}`);
   createdEmails.push(res.json.user.email);
+  const setup = await post('/v1/auth/2fa/setup', {}, res.json.accessToken);
+  assert.equal(setup.status, 200);
+  const enabled = await post(
+    '/v1/auth/2fa/verify',
+    { code: authenticator.generate(setup.json.secret) },
+    res.json.accessToken,
+  );
+  assert.equal(enabled.status, 200);
   return {
     email: res.json.user.email,
     accessToken: res.json.accessToken,
@@ -153,17 +189,25 @@ after(async () => {
 describe('api keys: mint, list, RBAC', () => {
   before(() => resetRateLimits());
 
-  it('POST /v1/api-keys mints a pk_ key and never returns a secret', async () => {
+  it('POST /v1/api-keys mints a qvse_ key and never returns a secret', async () => {
     const res = await post('/v1/api-keys', { name: 'Website' }, owner.accessToken);
     assert.equal(res.status, 201, JSON.stringify(res.json));
     assert.equal(res.json.name, 'Website');
 
     const key: string = res.json.publicKey;
-    assert.match(key, /^pk_/, 'pk_ prefix');
-    assert.equal(key.length, 60, 'fixed-length key');
+    assert.match(key, /^qvse_/, 'qvse_ prefix');
+    assert.equal(key.length, 62, 'fixed-length key');
     assert.ok(
       key.includes(owner.workspaceId.replace(/-/g, '')),
       'key embeds the workspace id segment',
+    );
+    assert.equal(workspaceIdFromPublicKey(key), owner.workspaceId);
+    assert.equal(
+      workspaceIdFromPublicKey(
+        `pk_${owner.workspaceId.replace(/-/g, '')}_legacyrandom123`,
+      ),
+      owner.workspaceId,
+      'existing pk_ keys remain resolvable',
     );
     assert.equal('secretHash' in res.json, false, 'secret hash is never returned');
 

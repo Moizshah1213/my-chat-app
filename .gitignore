@@ -44,3 +44,8 @@ node_modules
 !.env.example
 dist
 .next
+# extra
+*.zip
+.ngrok.log
+tmp/
+**/.tmp-*

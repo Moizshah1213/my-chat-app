@@ -7,9 +7,11 @@ import postgres from 'postgres';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { authenticator } from 'otplib';
 import { AppModule } from '../app.module.js';
 import { resetRateLimits } from '../rate-limit.js';
 import { closeDb } from '@livechat/db';
+import { conversationService } from '../conversations.service.js';
 
 /**
  * Phase 2 — Conversations REST suite (blueprint §6 inbox + §7 widget init).
@@ -27,6 +29,7 @@ import { closeDb } from '@livechat/db';
  */
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+process.env.EMAIL_PROVIDER = 'console';
 
 const BOOT_URL = process.env.BOOTSTRAP_DATABASE_URL!.replace(/\/[^/]+$/, '/livechat_test');
 let boot: ReturnType<typeof postgres>;
@@ -88,18 +91,43 @@ const patch = (path: string, body: unknown, bearer?: string) =>
 async function signup(label: string): Promise<Account> {
   const email = `${label}-${uniq()}@example.com`;
   createdEmails.push(email);
-  const res = await post('/v1/auth/signup', {
-    email,
-    password: 'correct-horse-battery',
-    name: label,
-    workspaceName: `${label} WS`,
-  });
+  const loggedTokens: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    const line = String(args[0] ?? '');
+    if (line.startsWith('[email:verify]')) loggedTokens.push(line.split('-> ')[1]?.trim() ?? '');
+    originalLog.apply(console, args as []);
+  };
+  let res: HttpResult;
+  try {
+    res = await post('/v1/auth/signup', {
+      email,
+      password: 'correct-horse-battery',
+      name: label,
+      workspaceName: `${label} WS`,
+    });
+  } finally {
+    console.log = originalLog;
+  }
   assert.equal(res.status, 200, `signup should succeed: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.requiresEmailVerification, true);
+  const verified = await post('/v1/auth/verify-email', { token: loggedTokens[0] });
+  assert.equal(verified.status, 200, 'verification link should verify the account');
+  const login = await post('/v1/auth/login', { email, password: 'correct-horse-battery' });
+  assert.equal(login.status, 200, 'verified account should sign in');
+  const setup = await post('/v1/auth/2fa/setup', {}, login.json.accessToken);
+  assert.equal(setup.status, 200);
+  const enabled = await post(
+    '/v1/auth/2fa/verify',
+    { code: authenticator.generate(setup.json.secret) },
+    login.json.accessToken,
+  );
+  assert.equal(enabled.status, 200);
   return {
     email,
-    accessToken: res.json.accessToken,
-    workspaceId: res.json.workspaceId,
-    userId: res.json.user.id,
+    accessToken: login.json.accessToken,
+    workspaceId: login.json.workspaceId,
+    userId: login.json.user.id,
   };
 }
 
@@ -209,6 +237,11 @@ describe('conversations: list, filters, pagination', () => {
     for (let i = 1; i < lastSeen.length; i++) {
       assert.ok(lastSeen[i]! <= lastSeen[i - 1]!, 'non-increasing lastMessageAt order');
     }
+
+    const messagePreview = await get(`/v1/conversations/${msgConv}`, owner.accessToken);
+    assert.equal(messagePreview.status, 200);
+    assert.equal(messagePreview.json.lastMessagePreview, 'seed-4');
+    assert.equal(messagePreview.json.lastMessageSenderType, 'agent');
   });
 
   it('status filter returns only matching conversations', async () => {
@@ -359,6 +392,80 @@ describe('conversations: messages (history, send, idempotency, closed rules)', (
     assert.equal(cnt?.n, 1, 'exactly one row for the key');
   });
 
+  it('agents can edit and delete only their own sent messages', async () => {
+    const sent = await post(
+      `/v1/conversations/${msgConv}/messages`,
+      { body: 'original message' },
+      owner.accessToken,
+    );
+    assert.equal(sent.status, 201, JSON.stringify(sent.json));
+
+    const edited = await patch(
+      `/v1/conversations/${msgConv}/messages/${sent.json.id}`,
+      { body: 'updated message' },
+      owner.accessToken,
+    );
+    assert.equal(edited.status, 200, JSON.stringify(edited.json));
+    assert.equal(edited.json.body, 'updated message');
+    assert.ok(edited.json.editedAt);
+
+    const deleted = await request(
+      `/v1/conversations/${msgConv}/messages/${sent.json.id}`,
+      { method: 'DELETE', bearer: owner.accessToken },
+    );
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
+    const page = await get(`/v1/conversations/${msgConv}/messages`, owner.accessToken);
+    assert.equal(page.status, 200);
+    assert.ok(!page.json.items.some((message: any) => message.id === sent.json.id));
+
+    const visitorMessage = await conversationService.visitorSend(
+      owner.workspaceId,
+      visitorId,
+      msgConv,
+      { body: 'visitor message' },
+    );
+    const forbiddenEdit = await patch(
+      `/v1/conversations/${msgConv}/messages/${visitorMessage.id}`,
+      { body: 'cannot change visitor text' },
+      owner.accessToken,
+    );
+    assert.equal(forbiddenEdit.status, 404, 'visitor messages are not editable by agents');
+  });
+
+  it('notification pause is per-agent and can be resumed', async () => {
+    const conv = openConvs[3]!;
+    const initial = await get(`/v1/conversations/${conv}/notifications`, owner.accessToken);
+    assert.equal(initial.status, 200);
+    assert.equal(initial.json.paused, false);
+
+    const paused = await patch(`/v1/conversations/${conv}/notifications`, { paused: true }, owner.accessToken);
+    assert.equal(paused.status, 200, JSON.stringify(paused.json));
+    assert.equal(paused.json.paused, true);
+    const preferences = await get('/v1/conversations/notification-preferences', owner.accessToken);
+    assert.ok(preferences.json.conversationIds.includes(conv));
+
+    const resumed = await patch(`/v1/conversations/${conv}/notifications`, { paused: false }, owner.accessToken);
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.json.paused, false);
+    const cleared = await get('/v1/conversations/notification-preferences', owner.accessToken);
+    assert.ok(!cleared.json.conversationIds.includes(conv));
+  });
+
+  it('deleting a conversation hides it from list and detail routes', async () => {
+    const conv = openConvs[3]!;
+    const deleted = await request(`/v1/conversations/${conv}`, {
+      method: 'DELETE',
+      bearer: owner.accessToken,
+    });
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
+
+    const detail = await get(`/v1/conversations/${conv}`, owner.accessToken);
+    assert.equal(detail.status, 404);
+    const list = await get('/v1/conversations?limit=50', owner.accessToken);
+    assert.equal(list.status, 200);
+    assert.ok(!list.json.items.some((conversation: any) => conversation.id === conv));
+  });
+
   it('sending to a closed conversation is rejected (400) for agents', async () => {
     const conv = openConvs[0];
     const close = await patch(`/v1/conversations/${conv}`, { status: 'closed' }, owner.accessToken);
@@ -370,6 +477,51 @@ describe('conversations: messages (history, send, idempotency, closed rules)', (
 
     // Restore so any later suite over the same fixtures sees an open conversation.
     await patch(`/v1/conversations/${conv}`, { status: 'open' }, owner.accessToken);
+  });
+
+  it('does not auto-reply after an agent answers the visitor first', async () => {
+    const conversationId = openConvs[4]!;
+    await boot`
+      INSERT INTO ai_settings (workspace_id, mode, provider, base_url, model, api_key_enc)
+      VALUES (
+        ${owner.workspaceId}::uuid,
+        'auto',
+        'openai_compatible',
+        'https://api.openai.com/v1',
+        'test-model',
+        'test-encrypted-key'
+      )
+      ON CONFLICT (workspace_id) DO UPDATE SET
+        mode = EXCLUDED.mode,
+        provider = EXCLUDED.provider,
+        base_url = EXCLUDED.base_url,
+        model = EXCLUDED.model,
+        api_key_enc = EXCLUDED.api_key_enc
+    `;
+
+    const visitorMessage = await conversationService.visitorSend(
+      owner.workspaceId,
+      visitorId,
+      conversationId,
+      { body: 'Can you help me with my order?' },
+    );
+    await conversationService.sendMessage(
+      owner.workspaceId,
+      'owner',
+      owner.userId,
+      conversationId,
+      { body: 'Sure, I can help with that.' },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 3_200));
+    const aiReplies = await boot`
+      SELECT id FROM messages
+      WHERE workspace_id = ${owner.workspaceId}::uuid
+        AND conversation_id = ${conversationId}::uuid
+        AND sender_type = 'ai'
+        AND created_at >= ${visitorMessage.createdAt}
+    `;
+    assert.equal(aiReplies.length, 0, 'AI must defer to the agent response');
   });
 
   it('visitor_init resumes the open conversation; after close it opens a NEW one', async () => {

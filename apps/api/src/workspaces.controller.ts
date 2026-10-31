@@ -40,6 +40,12 @@ export class WorkspacesController {
     return workspaceService.listMembers(auth.workspaceId, auth.role);
   }
 
+  @Get('invitations')
+  @RequireCapability('members:read')
+  listInvitations(@CurrentAuth() auth: { workspaceId: string; role: 'owner' | 'admin' | 'agent' }) {
+    return workspaceService.listInvitations(auth.workspaceId, auth.role);
+  }
+
   @Post('invitations')
   @RequireCapability('members:invite')
   async invite(
@@ -52,6 +58,24 @@ export class WorkspacesController {
       actorId: auth.sub,
       action: 'members.invite',
       target: res.invitationId,
+      ip: req.ip ?? null,
+      userAgent: (req.headers['user-agent'] as string) ?? null,
+    });
+    return res;
+  }
+
+  @Delete('invitations/:id')
+  @RequireCapability('members:invite')
+  async cancelInvitation(
+    @CurrentAuth() auth: { workspaceId: string; sub: string; role: 'owner' | 'admin' | 'agent' },
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const res = await workspaceService.cancelInvitation(auth.workspaceId, auth.role, id);
+    void recordAuditFor(auth.workspaceId, {
+      actorId: auth.sub,
+      action: 'members.invitation-cancel',
+      target: id,
       ip: req.ip ?? null,
       userAgent: (req.headers['user-agent'] as string) ?? null,
     });
@@ -97,6 +121,7 @@ export class WorkspacesController {
     setRefreshCookie(res, session.refreshToken);
     return {
       accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
       user: session.user,
       workspaceId: session.workspaceId,
       role: session.role,

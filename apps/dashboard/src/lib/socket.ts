@@ -7,8 +7,11 @@ export type { Socket };
  *  rooms (live messages, typing). Agents auto-join `workspace:{id}` on connect. */
 export interface AgentSocketHandlers {
   onMessage?: (payload: unknown) => void;
+  onMessageUpdated?: (payload: unknown) => void;
+  onMessageDeleted?: (payload: unknown) => void;
   onTyping?: (payload: unknown) => void;
   onConversationUpdated?: (payload: unknown) => void;
+  onConversationDeleted?: (payload: unknown) => void;
   onVisitorPresence?: (payload: unknown) => void;
   onStatus?: (status: 'connecting' | 'online' | 'offline') => void;
 }
@@ -51,6 +54,9 @@ export function connectAgentSocket(
     socket.on('visitor:presence', handlers.onVisitorPresence);
   }
   if (handlers.onMessage) socket.on('message:new', handlers.onMessage);
+  if (handlers.onMessageUpdated) socket.on('message:updated', handlers.onMessageUpdated);
+  if (handlers.onMessageDeleted) socket.on('message:deleted', handlers.onMessageDeleted);
+  if (handlers.onConversationDeleted) socket.on('conversation:deleted', handlers.onConversationDeleted);
   if (handlers.onTyping) socket.on('typing', handlers.onTyping);
 
   return socket;

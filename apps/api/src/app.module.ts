@@ -6,8 +6,13 @@ import { ConversationsController } from './conversations.controller.js';
 import { ApiKeysController } from './api-keys.controller.js';
 import { AuditController } from './audit.controller.js';
 import { VisitorsController } from './visitors.controller.js';
+import { AiController } from './ai.controller.js';
+import { EmailSettingsController } from './email-settings.controller.js';
+import { WidgetEmbedController } from './widget-embed.controller.js';
 import { WidgetSettingsController } from './widget-settings.controller.js';
 import { WidgetController } from './widget.controller.js';
+import { HealthController } from './health.controller.js';
+import { NotificationsController } from './notifications.controller.js';
 import { ChatGateway } from './chat.gateway.js';
 import { AuthGuard, CapabilityGuard } from './guards.js';
 import { RateLimitGuard } from './rate-limit.js';
@@ -23,7 +28,12 @@ import { HttpExceptionFilter } from './filters.js';
     AuditController,
     VisitorsController,
     WidgetSettingsController,
+    AiController,
+    EmailSettingsController,
+    WidgetEmbedController,
     WidgetController,
+    HealthController,
+    NotificationsController,
   ],
   providers: [
     // Order matters: rate-limit BEFORE auth so credential-stuffing floods get

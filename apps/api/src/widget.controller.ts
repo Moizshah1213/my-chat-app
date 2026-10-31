@@ -33,7 +33,7 @@ export class WidgetController {
   }
 
   /**
-   * GET /widget/v1/settings?key=pk_… (blueprint §10): the widget's bootstrap
+   * GET /widget/v1/settings?key=qvse_… (blueprint §10): the widget's bootstrap
    * config. The key is verified (live + not revoked), the Origin allowlist is
    * enforced, and only the public projection is returned.
    */

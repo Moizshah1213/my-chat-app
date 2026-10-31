@@ -1,16 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { api, getAccessToken, type Conversation, type ConversationStatus } from '@/lib/api';
 import { connectAgentSocket, type Socket } from '@/lib/socket';
 import { useAuth } from '@/lib/auth';
+import { notifyConversationChange, notifyVisitorOnline } from '@/lib/notifications';
 import { RefreshIcon, SearchIcon, UserIcon } from '@/components/icons';
 
 const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 export function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const diff = Date.now() - d.getTime();
   const mins = Math.round(diff / 60_000);
   if (mins < 1) return 'just now';
   if (mins < 60) return RELATIVE.format(-mins, 'minute');
@@ -19,7 +21,6 @@ export function timeAgo(iso: string): string {
   return RELATIVE.format(-Math.round(hours / 24), 'day');
 }
 
-/** Avatar initials from a label ("Mary Smith" → "MS", fallback "VI"). */
 function initialsOf(label: string): string {
   const parts = label.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'VI';
@@ -31,12 +32,11 @@ function initialsOf(label: string): string {
 }
 
 interface Props {
-  /** Conversation highlighted as active (detail view). */
   selectedId?: string;
+  onSelect?: (id: string) => void;
 }
 
-/** Shared inbox conversation list: search, status/assignee filters, live updates. */
-export default function InboxList({ selectedId }: Props) {
+export default function InboxList({ selectedId, onSelect }: Props) {
   const { user } = useAuth();
   const [items, setItems] = useState<Conversation[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -73,12 +73,15 @@ export default function InboxList({ selectedId }: Props) {
     void load();
   }, [load]);
 
-  // Live inbox updates: workspace room events (assign/close/new) → refetch.
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
     const socket = connectAgentSocket(token, {
-      onConversationUpdated: () => void load(),
+      onConversationUpdated: (payload) => {
+        void load();
+        notifyConversationChange(payload);
+      },
+      onVisitorPresence: notifyVisitorOnline,
     });
     socketRef.current = socket;
     return () => {
@@ -87,7 +90,6 @@ export default function InboxList({ selectedId }: Props) {
     };
   }, [load]);
 
-  // Global search: initial ?q= from the topbar jump + live "lc-search" events.
   useEffect(() => {
     const initial = new URLSearchParams(window.location.search).get('q');
     if (initial) setQuery(initial);
@@ -166,12 +168,18 @@ export default function InboxList({ selectedId }: Props) {
           `Visitor ${c.visitorId?.slice(0, 8) ?? '—'}`;
         const assigned = Boolean(c.assignedTo);
         const mine = Boolean(c.assignedTo) && c.assignedTo === user?.id;
+        const isActive = selectedId === c.id;
+
         return (
-          <Link
+          <div
             key={c.id}
-            className={`conv-item${selectedId === c.id ? ' active' : ''}`}
-            href={`/conversations/${c.id}`}
-            aria-current={selectedId === c.id ? 'page' : undefined}
+            className={`conv-item${isActive ? ' active' : ''}`}
+            onClick={() => {
+              if (onSelect) onSelect(c.id);
+            }}
+            role="button"
+            tabIndex={0}
+            aria-current={isActive ? 'page' : undefined}
           >
             <span className="conv-avatar" aria-hidden="true">
               {initialsOf(label)}
@@ -183,13 +191,10 @@ export default function InboxList({ selectedId }: Props) {
               </span>
               <span className="conv-row sub">
                 <span className="when">{timeAgo(c.lastMessageAt)}</span>
-                <span className={`assignee-chip${assigned ? '' : ' none'}`}>
-                  <UserIcon size={11} />
-                  {mine ? 'You' : assigned ? 'Teammate' : 'Unassigned'}
-                </span>
+
               </span>
             </span>
-          </Link>
+          </div>
         );
       })}
       {cursor && (

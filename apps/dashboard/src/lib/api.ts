@@ -1,4 +1,8 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === 'development'
+    ? 'http://localhost:4000'
+    : 'https://api.130.210.12.123.sslip.io');
 
 export type Role = 'owner' | 'admin' | 'agent';
 export type ConversationStatus = 'open' | 'pending' | 'closed';
@@ -7,10 +11,14 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
   totpEnabled?: boolean;
 }
 export interface Session {
   accessToken: string;
+  refreshToken?: string;
+  twoFactorSkipped?: boolean;
   user: User;
   workspaceId: string;
   role: Role;
@@ -43,9 +51,10 @@ export interface Message {
   conversationId?: string;
   body: string;
   bodyType?: 'text';
-  senderType: 'agent' | 'visitor';
+  senderType: 'agent' | 'visitor' | 'ai' | 'system';
   senderId?: string;
   createdAt: string;
+  editedAt?: string | null;
 }
 
 /** The API nests the visitor as `visitor: {id,name,email}`; the UI reads `visitorId`.
@@ -61,8 +70,19 @@ export function normalizeConversation(raw: Conversation): Conversation {
 }
 export interface Member {
   userId: string;
+  name: string | null;
+  email: string;
   role: Role;
   createdAt: string;
+}
+export interface Invitation {
+  id: string;
+  email: string;
+  role: Role;
+  status: 'pending' | 'expired' | 'accepted';
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
 }
 export interface ApiKeyView {
   id: string;
@@ -103,26 +123,89 @@ export interface LoginSession {
   id: string;
   ip: string | null;
   userAgent: string | null;
+  location: string | null;
   createdAt: string;
   expiresAt: string;
   current: boolean;
 }
 export interface WidgetSettingsView {
   color: string;
+  theme: 'dark' | 'light';
+  backgroundColor: string;
+  backgroundGradient: boolean;
+  backgroundGradientColor: string;
+  buttonColor: string;
+  agentBubbleColor: string;
   logoUrl: string | null;
   position: 'left' | 'right';
   greeting: string | null;
   offlineMessage: string | null;
-  prechatFields: unknown[];
+  prechatFields: WidgetPrechatField[];
+  prechatEnabled: boolean;
   workingHours: Record<string, unknown>;
+  quickReplies: string[];
   aiEnabled: boolean;
   aiInstructions: string | null;
   allowedDomains: string[];
   language: string;
 }
+export interface WidgetPrechatField {
+  name: string;
+  label?: string;
+  type?: 'text' | 'email' | 'tel';
+  required?: boolean;
+}
 export interface Page<T> {
   items: T[];
   nextCursor: string | null;
+}
+
+/** Email provider settings (returned to agent dashboard). */
+export interface EmailSettingsView {
+  provider: 'smtp' | 'resend' | 'sendgrid';
+  host: string | null;
+  port: number | null;
+  user: string | null;
+  fromEmail: string | null;
+  fromName: string | null;
+  verifiedAt: string | null;
+}
+
+/** Email provider settings input (agent saves). */
+export interface EmailSettingsInput {
+  provider?: 'smtp' | 'resend' | 'sendgrid';
+  host?: string;
+  port?: number;
+  user?: string;
+  password?: string;
+  fromEmail?: string | null;
+  fromName?: string | null;
+}
+
+/** AI assistant settings (returned to agent dashboard). Key is never included. */
+export interface AiSettingsView {
+  mode: 'off' | 'suggest' | 'auto';
+  provider: 'openai_compatible' | 'openai' | 'anthropic';
+  baseUrl: string | null;
+  model: string | null;
+  apiKeyLast4: string | null;
+  instructions: Record<string, string>;
+  temperature: number;
+  maxOutputTokens: number;
+  monthlyTokenCap: number;
+}
+
+/** AI assistant settings input (agent saves). */
+export interface AiSettingsInput {
+  mode?: 'off' | 'suggest' | 'auto';
+  provider?: 'openai_compatible' | 'openai' | 'anthropic';
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+  instructions?: Record<string, string>;
+  temperature?: number;
+  maxOutputTokens?: number;
+  monthlyTokenCap?: number;
 }
 
 export class ApiError extends Error {
@@ -138,23 +221,45 @@ export class ApiError extends Error {
 }
 
 const TOKEN_KEY = 'lc_access';
+const REFRESH_TOKEN_KEY = 'lc_refresh';
+
 let accessToken: string | null = null;
+let refreshToken: string | null = null;
+
 if (typeof window !== 'undefined') {
   accessToken = window.localStorage.getItem(TOKEN_KEY);
+  refreshToken = window.localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setTokens(access: string | null, refresh?: string | null): void {
+  accessToken = access;
+  if (refresh !== undefined) {
+    refreshToken = refresh;
+  }
+  if (typeof window === 'undefined') return;
+
+  if (access) window.localStorage.setItem(TOKEN_KEY, access);
+  else window.localStorage.removeItem(TOKEN_KEY);
+
+  if (refresh !== undefined) {
+    if (refresh) window.localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+    else window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
 }
 
 export function setAccessToken(token: string | null): void {
-  accessToken = token;
-  if (typeof window === 'undefined') return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  setTokens(token);
 }
 
 export function getAccessToken(): string | null {
   return accessToken;
 }
 
-/** Core fetch wrapper: Bearer token, credentialed (refresh cookie), auto
+export function getRefreshToken(): string | null {
+  return refreshToken;
+}
+
+/** Core fetch wrapper: Bearer token, credentialed, auto
  *  refresh-then-retry once on 401, uniform ApiError on failure. */
 async function request<T>(path: string, init: RequestInit = {}, retryOn401 = true): Promise<T> {
   const headers: Record<string, string> = {
@@ -164,7 +269,7 @@ async function request<T>(path: string, init: RequestInit = {}, retryOn401 = tru
   if (accessToken) headers.authorization = `Bearer ${accessToken}`;
 
   const res = await fetch(API_URL + path, { ...init, headers, credentials: 'include' });
-  if (res.status === 401 && retryOn401 && accessToken) {
+  if (res.status === 401 && retryOn401 && (accessToken || refreshToken)) {
     if (await tryRefresh()) return request<T>(path, init, false);
   }
   if (!res.ok) {
@@ -183,24 +288,27 @@ async function request<T>(path: string, init: RequestInit = {}, retryOn401 = tru
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-/** Single-flight refresh. The API ROTATES refresh tokens and treats re-use of an
- *  already-rotated token as theft (revokes the whole session). Two parallel refresh
- *  calls (React StrictMode double effects, several queries 401-ing at once) would
- *  therefore sign the user out. Everyone shares ONE in-flight request instead. */
+/** Single-flight refresh using body-borne refreshToken to bypass cross-domain cookie blocks. */
 let refreshInFlight: Promise<Session> | null = null;
 
 export function refreshSession(): Promise<Session> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
+      const currentRefresh = getRefreshToken();
       const res = await fetch(`${API_URL}/v1/auth/refresh`, {
         method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken: currentRefresh }),
         credentials: 'include',
       });
       if (!res.ok) {
+        setTokens(null, null);
         throw new ApiError(res.status, 'refresh_failed', 'Session expired');
       }
       const data = (await res.json()) as Session;
-      setAccessToken(data.accessToken);
+      setTokens(data.accessToken, data.refreshToken);
       return data;
     })().finally(() => {
       refreshInFlight = null;
@@ -221,23 +329,109 @@ async function tryRefresh(): Promise<boolean> {
 /** Typed endpoint map — one place for every dashboard call. */
 export const api = {
   // --- auth ---
-  login: (email: string, password: string, totpCode?: string) =>
-    request<Session | { requires2fa: true; tempToken?: string }>('/v1/auth/login', {
+  login: async (email: string, password: string, totpCode?: string) => {
+    const res = await request<Session | { requires2fa: true; tempToken?: string }>('/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, totpCode }),
+    });
+    if ('accessToken' in res && res.accessToken) {
+      setTokens(res.accessToken, res.refreshToken);
+    }
+    return res;
+  },
+  googleLogin: async (idToken: string) => {
+    const res = await request<Session | { requires2fa: true; tempToken?: string }>('/v1/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    }, false);
+    if ('accessToken' in res && res.accessToken) {
+      setTokens(res.accessToken, res.refreshToken);
+    }
+    return res;
+  },
+  startQrLogin: (pollToken: string) =>
+    request<{ challengeToken: string; expiresAt: string }>(
+      '/v1/auth/qr/start',
+      { method: 'POST', body: JSON.stringify({ pollToken }) },
+      false,
+    ),
+  pollQrLogin: (challengeToken: string, pollToken: string) =>
+    request<
+      | { status: 'pending' | 'expired' | 'consumed' }
+      | ({ status: 'approved' } & Session)
+    >(
+      '/v1/auth/qr/poll',
+      { method: 'POST', body: JSON.stringify({ challengeToken, pollToken }) },
+      false,
+    ),
+  completeTwoFactorLogin: (tempToken: string, code: string) =>
+    request<Session>('/v1/auth/2fa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ tempToken, code }),
+    }).then((session) => {
+      setTokens(session.accessToken, session.refreshToken);
+      return session;
+    }),
+  forgotPassword: (email: string) =>
+    request<{ ok: true }>('/v1/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: true }>('/v1/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
     }),
   signup: (input: { email: string; password: string; name: string; workspaceName: string }) =>
-    request<Session>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(input) }),
+    request<{ requiresEmailVerification: true; email: string }>('/v1/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    }),
+  verifyEmail: (token: string) =>
+    request<{ ok: true }>('/v1/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  resendVerification: (email: string) =>
+    request<{ ok: true }>('/v1/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
   refresh: () => refreshSession(),
-  logout: () => request<unknown>('/v1/auth/logout', { method: 'POST' }),
+  logout: async () => {
+    try {
+      await request<unknown>('/v1/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken: getRefreshToken() }),
+      });
+    } finally {
+      setTokens(null, null);
+    }
+  },
 
   // --- workspace + team ---
   getWorkspace: () => request<Workspace>('/v1/workspace'),
   listMembers: () => request<Member[]>('/v1/members'),
+  listInvitations: () => request<Invitation[]>('/v1/invitations'),
   invite: (email: string, role: Role) =>
-    request<{ invitationId: string; token: string }>('/v1/invitations', {
+    request<{ invitationId: string; token: string; inviteUrl: string }>('/v1/invitations', {
       method: 'POST',
       body: JSON.stringify({ email, role }),
+    }),
+  cancelInvitation: (id: string) =>
+    request<{ ok: true }>(`/v1/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  previewInvitation: (token: string) =>
+    request<{ email: string; role: Role; workspaceName: string; expiresAt: string }>(
+      `/v1/invitations/${encodeURIComponent(token)}`,
+      { method: 'GET' },
+    ),
+  acceptInvitation: (token: string, input: { name?: string; password?: string }) =>
+    request<Session>('/v1/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token, ...input }),
+    }).then((session) => {
+      setTokens(session.accessToken, session.refreshToken);
+      return session;
     }),
   updateRole: (userId: string, role: Role) =>
     request<{ ok: true }>(`/v1/members/${userId}/role`, {
@@ -285,6 +479,24 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     }).then(normalizeConversation),
+  deleteConversation: (id: string) =>
+    request<{ ok: true }>(`/v1/conversations/${id}`, { method: 'DELETE' }),
+  getNotificationPreference: (id: string) =>
+    request<{ paused: boolean }>(`/v1/conversations/${id}/notifications`),
+  updateNotificationPreference: (id: string, paused: boolean) =>
+    request<{ paused: boolean }>(`/v1/conversations/${id}/notifications`, {
+      method: 'PATCH',
+      body: JSON.stringify({ paused }),
+    }),
+  listNotificationPreferences: () =>
+    request<{ conversationIds: string[] }>('/v1/conversations/notification-preferences'),
+  editMessage: (id: string, messageId: string, body: string) =>
+    request<Message>(`/v1/conversations/${id}/messages/${messageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    }),
+  deleteMessage: (id: string, messageId: string) =>
+    request<{ ok: true }>(`/v1/conversations/${id}/messages/${messageId}`, { method: 'DELETE' }),
 
   // --- api keys ---
   listApiKeys: () => request<ApiKeyView[]>('/v1/api-keys'),
@@ -305,13 +517,50 @@ export const api = {
   listAuditLogs: (limit = 100) =>
     request<AuditEntry[]>(`/v1/audit-logs?limit=${limit}`),
 
-  // --- visitors (blueprint §12) ---
+  // --- visitors ---
   listVisitors: () => request<VisitorSummary[]>('/v1/visitors'),
   getVisitor: (id: string) => request<VisitorDetail>(`/v1/visitors/${id}`),
+  updateVisitor: (id: string, patch: { name?: string; email?: string; displayName?: string; notes?: string; tags?: string[] }) =>
+    request<VisitorDetail>(`/v1/visitors/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
-  // --- security: 2FA + sessions (blueprint §7.1/§12) ---
+  // --- email settings ---
+  getEmailSettings: () => request<EmailSettingsView>('/v1/email-settings'),
+  updateEmailSettings: (patch: EmailSettingsInput) =>
+    request<{ ok: true }>('/v1/email-settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  // --- AI settings ---
+  getAiSettings: () => request<AiSettingsView>('/v1/ai/settings'),
+  updateAiSettings: (patch: AiSettingsInput) =>
+    request<{ ok: true }>('/v1/ai/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  // --- security: 2FA + sessions ---
+  getProfile: () => request<Pick<User, 'id' | 'email' | 'name' | 'phone' | 'avatarUrl'> & {
+    pendingEmail: string | null;
+  }>('/v1/auth/profile'),
+  updateProfile: (input: { name: string; phone: string | null }) =>
+    request<Pick<User, 'id' | 'email' | 'name' | 'phone' | 'avatarUrl'> & {
+      pendingEmail: string | null;
+    }>('/v1/auth/profile', { method: 'PATCH', body: JSON.stringify(input) }),
+  uploadAvatar: (mimeType: 'image/jpeg' | 'image/png' | 'image/webp', imageData: string) =>
+    request<{ avatarUrl: string }>('/v1/auth/profile/avatar', {
+      method: 'POST',
+      body: JSON.stringify({ mimeType, imageData }),
+    }),
+  deleteAvatar: () => request<{ avatarUrl: null }>('/v1/auth/profile/avatar', { method: 'DELETE' }),
+  requestEmailChange: (email: string, password: string) =>
+    request<{ ok: true; verificationRequired: true }>('/v1/auth/profile/email', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: true }>('/v1/auth/profile/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   setup2fa: () =>
     request<{ secret: string; otpauthUrl: string }>('/v1/auth/2fa/setup', { method: 'POST' }),
+  skip2fa: () =>
+    request<Session>('/v1/auth/2fa/skip', { method: 'POST', body: JSON.stringify({}) }),
   enable2fa: (code: string) =>
     request<{ recoveryCodes: string[] }>('/v1/auth/2fa/verify', {
       method: 'POST',
@@ -327,8 +576,7 @@ export const api = {
     request<{ ok: true }>(`/v1/auth/sessions/${id}`, { method: 'DELETE' }),
   logoutAll: () => request<{ revoked: number }>('/v1/auth/logout-all', { method: 'POST' }),
 
-  /** "Verify installation": resolve the PUBLIC settings endpoint with this key.
-   *  No auth — mirrors exactly what an embedded widget does on page load. */
+  /** "Verify installation": resolve the PUBLIC settings endpoint with this key. */
   checkWidgetKey: async (
     publicKey: string,
   ): Promise<{ ok: boolean; status: number; detail: string }> => {

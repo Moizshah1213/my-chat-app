@@ -6,6 +6,7 @@ import postgres from 'postgres';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { authenticator } from 'otplib';
 import { AppModule } from '../app.module.js';
 import { resetRateLimits } from '../rate-limit.js';
 import { closeDb } from '@livechat/db';
@@ -16,12 +17,13 @@ import { closeDb } from '@livechat/db';
  * Boots the REAL Nest app against the TEST database. Covers the agent-facing
  * GET/PATCH /v1/widget/settings (defaults, round-trip, null-clearing, strict
  * validation / mass-assignment, RBAC, tenant isolation) and the PUBLIC
- * GET /widget/v1/settings?key=pk_… (key resolution, Origin allowlist, public
+ * GET /widget/v1/settings?key=qvse_… (key resolution, Origin allowlist, public
  * projection — never allowedDomains or aiInstructions) plus visitor_init by
  * public key.
  */
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+process.env.EMAIL_PROVIDER = 'console';
 
 const BOOT_URL = process.env.BOOTSTRAP_DATABASE_URL!.replace(/\/[^/]+$/, '/livechat_test');
 let boot: ReturnType<typeof postgres>;
@@ -85,18 +87,43 @@ const settingsFetch = (key: string, origin?: string): Promise<HttpResult> =>
 async function signup(label: string): Promise<Account> {
   const email = `${label}-${uniq()}@example.com`;
   createdEmails.push(email);
-  const res = await post('/v1/auth/signup', {
-    email,
-    password: 'correct-horse-battery',
-    name: label,
-    workspaceName: `${label} WS`,
-  });
+  const loggedTokens: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    const line = String(args[0] ?? '');
+    if (line.startsWith('[email:verify]')) loggedTokens.push(line.split('-> ')[1]?.trim() ?? '');
+    originalLog.apply(console, args as []);
+  };
+  let res: HttpResult;
+  try {
+    res = await post('/v1/auth/signup', {
+      email,
+      password: 'correct-horse-battery',
+      name: label,
+      workspaceName: `${label} WS`,
+    });
+  } finally {
+    console.log = originalLog;
+  }
   assert.equal(res.status, 200, `signup should succeed: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.requiresEmailVerification, true);
+  const verified = await post('/v1/auth/verify-email', { token: loggedTokens[0] });
+  assert.equal(verified.status, 200, 'verification link should verify the account');
+  const login = await post('/v1/auth/login', { email, password: 'correct-horse-battery' });
+  assert.equal(login.status, 200);
+  const setup = await post('/v1/auth/2fa/setup', {}, login.json.accessToken);
+  assert.equal(setup.status, 200);
+  const enabled = await post(
+    '/v1/auth/2fa/verify',
+    { code: authenticator.generate(setup.json.secret) },
+    login.json.accessToken,
+  );
+  assert.equal(enabled.status, 200);
   return {
     email,
-    accessToken: res.json.accessToken,
-    workspaceId: res.json.workspaceId,
-    userId: res.json.user.id,
+    accessToken: login.json.accessToken,
+    workspaceId: login.json.workspaceId,
+    userId: login.json.user.id,
   };
 }
 
@@ -116,6 +143,14 @@ async function createAgent(label: string): Promise<Account> {
   });
   assert.equal(res.status, 200, `accept should succeed: ${JSON.stringify(res.json)}`);
   createdEmails.push(res.json.user.email);
+  const setup = await post('/v1/auth/2fa/setup', {}, res.json.accessToken);
+  assert.equal(setup.status, 200);
+  const enabled = await post(
+    '/v1/auth/2fa/verify',
+    { code: authenticator.generate(setup.json.secret) },
+    res.json.accessToken,
+  );
+  assert.equal(enabled.status, 200);
   return {
     email: res.json.user.email,
     accessToken: res.json.accessToken,
@@ -170,12 +205,20 @@ describe('widget settings: agent CRUD, validation, RBAC, isolation', () => {
   it('GET returns defaults when no settings row exists yet', async () => {
     const res = await get('/v1/widget/settings', owner.accessToken);
     assert.equal(res.status, 200, JSON.stringify(res.json));
-    assert.equal(res.json.color, '#4f46e5');
+    assert.equal(res.json.color, '#303033');
+    assert.equal(res.json.theme, 'dark');
+    assert.equal(res.json.backgroundColor, '#000000');
+    assert.equal(res.json.backgroundGradient, false);
+    assert.equal(res.json.backgroundGradientColor, '#19191d');
+    assert.equal(res.json.buttonColor, '#f4f4f5');
+    assert.equal(res.json.agentBubbleColor, '#1b1b1c');
     assert.equal(res.json.position, 'right');
     assert.equal(res.json.language, 'en');
     assert.deepEqual(res.json.allowedDomains, []);
     assert.deepEqual(res.json.prechatFields, []);
+    assert.equal(res.json.prechatEnabled, true);
     assert.deepEqual(res.json.workingHours, {});
+    assert.deepEqual(res.json.quickReplies, []);
     assert.equal(res.json.aiEnabled, false);
     assert.equal(res.json.greeting, null);
   });
@@ -185,24 +228,40 @@ describe('widget settings: agent CRUD, validation, RBAC, isolation', () => {
       '/v1/widget/settings',
       {
         color: '#ff5500',
+        theme: 'light',
+        backgroundColor: '#f5f5f5',
+        backgroundGradient: true,
+        backgroundGradientColor: '#b8b8c0',
+        buttonColor: '#222222',
+        agentBubbleColor: '#eeeeee',
         position: 'left',
         greeting: 'Hi there!',
         offlineMessage: 'We are away',
         logoUrl: 'https://cdn.example.com/logo.png',
         language: 'fr',
         prechatFields: [{ name: 'email', required: true }],
+        prechatEnabled: false,
         workingHours: { mon: '9-17' },
+        quickReplies: ['Pricing', 'Book a demo'],
         allowedDomains: ['shop.example.com'],
       },
       owner.accessToken,
     );
     assert.equal(res.status, 200, JSON.stringify(res.json));
     assert.equal(res.json.color, '#ff5500');
+    assert.equal(res.json.theme, 'light');
+    assert.equal(res.json.backgroundColor, '#f5f5f5');
+    assert.equal(res.json.backgroundGradient, true);
+    assert.equal(res.json.backgroundGradientColor, '#b8b8c0');
+    assert.equal(res.json.buttonColor, '#222222');
+    assert.equal(res.json.agentBubbleColor, '#eeeeee');
     assert.equal(res.json.position, 'left');
     assert.equal(res.json.greeting, 'Hi there!');
     assert.equal(res.json.language, 'fr');
     assert.deepEqual(res.json.prechatFields, [{ name: 'email', required: true }]);
+    assert.equal(res.json.prechatEnabled, false);
     assert.deepEqual(res.json.workingHours, { mon: '9-17' });
+    assert.deepEqual(res.json.quickReplies, ['Pricing', 'Book a demo']);
     assert.deepEqual(res.json.allowedDomains, ['shop.example.com']);
 
     const get_ = await get('/v1/widget/settings', owner.accessToken);
@@ -258,7 +317,7 @@ describe('widget settings: agent CRUD, validation, RBAC, isolation', () => {
   it('settings are tenant-isolated (foreign workspace sees its own defaults)', async () => {
     const foreignGet = await get('/v1/widget/settings', foreign.accessToken);
     assert.equal(foreignGet.status, 200);
-    assert.equal(foreignGet.json.color, '#4f46e5', 'foreign workspace sees defaults');
+    assert.equal(foreignGet.json.color, '#303033', 'foreign workspace sees defaults');
 
     const foreignPatch = await patch(
       '/v1/widget/settings',
@@ -282,11 +341,19 @@ describe('widget settings: public fetch by widget key', () => {
   it('returns defaults + the public projection (no allowlist/ai instructions)', async () => {
     const pub = await settingsFetch(publicKey);
     assert.equal(pub.status, 200, JSON.stringify(pub.json));
-    assert.equal(pub.json.color, '#4f46e5');
+    assert.equal(pub.json.color, '#303033');
+    assert.equal(pub.json.theme, 'dark');
+    assert.equal(pub.json.backgroundColor, '#000000');
+    assert.equal(pub.json.backgroundGradient, false);
+    assert.equal(pub.json.backgroundGradientColor, '#19191d');
+    assert.equal(pub.json.buttonColor, '#f4f4f5');
+    assert.equal(pub.json.agentBubbleColor, '#1b1b1c');
     assert.equal(pub.json.position, 'right');
     assert.equal(pub.json.language, 'en');
     assert.equal(pub.json.aiEnabled, false);
     assert.deepEqual(pub.json.prechatFields, []);
+    assert.equal(pub.json.prechatEnabled, true);
+    assert.deepEqual(pub.json.quickReplies, []);
     assert.equal('allowedDomains' in pub.json, false, 'allowlist never leaked to the widget');
     assert.equal('aiInstructions' in pub.json, false);
   });
@@ -296,10 +363,20 @@ describe('widget settings: public fetch by widget key', () => {
       '/v1/widget/settings',
       {
         color: '#123456',
+        theme: 'light',
+        backgroundColor: '#fafafa',
+        backgroundGradient: true,
+        backgroundGradientColor: '#eeeeee',
+        buttonColor: '#123456',
+        agentBubbleColor: '#eeeeee',
         greeting: 'Hello',
         offlineMessage: 'Away',
         language: 'de',
         aiEnabled: true,
+        prechatEnabled: true,
+        prechatFields: [{ name: 'email', label: 'Work email', type: 'email', required: true }],
+        quickReplies: ['Pricing'],
+        workingHours: { days: { mon: ['09:00', '17:00'] } },
         allowedDomains: ['shop.example.com', '*.other.example.com'],
       },
       owner.accessToken,
@@ -309,10 +386,22 @@ describe('widget settings: public fetch by widget key', () => {
     const pub = await settingsFetch(publicKey);
     assert.equal(pub.status, 200, JSON.stringify(pub.json));
     assert.equal(pub.json.color, '#123456');
+    assert.equal(pub.json.theme, 'light');
+    assert.equal(pub.json.backgroundColor, '#fafafa');
+    assert.equal(pub.json.backgroundGradient, true);
+    assert.equal(pub.json.backgroundGradientColor, '#eeeeee');
+    assert.equal(pub.json.buttonColor, '#123456');
+    assert.equal(pub.json.agentBubbleColor, '#eeeeee');
     assert.equal(pub.json.greeting, 'Hello');
     assert.equal(pub.json.offlineMessage, 'Away');
     assert.equal(pub.json.language, 'de');
     assert.equal(pub.json.aiEnabled, true);
+    assert.equal(pub.json.prechatEnabled, true);
+    assert.deepEqual(pub.json.prechatFields, [
+      { name: 'email', label: 'Work email', type: 'email', required: true },
+    ]);
+    assert.deepEqual(pub.json.quickReplies, ['Pricing']);
+    assert.deepEqual(pub.json.workingHours, { days: { mon: ['09:00', '17:00'] } });
     assert.equal('allowedDomains' in pub.json, false);
     assert.equal('aiInstructions' in pub.json, false);
   });
@@ -342,12 +431,12 @@ describe('widget settings: public fetch by widget key', () => {
     const missing = await get('/widget/v1/settings');
     assert.equal(missing.status, 400, 'key query param is required');
 
-    const unknown = await settingsFetch(`pk_${'0'.repeat(32)}_randomtail123`);
+    const unknown = await settingsFetch(`qvse_${'0'.repeat(32)}_randomtail123`);
     assert.equal(unknown.status, 404, 'unknown key rejected');
     assert.equal(unknown.json.error.code, 'not_found');
 
     const forged = await settingsFetch(
-      `pk_${owner.workspaceId.replace(/-/g, '')}_forgedtail456`,
+      `qvse_${owner.workspaceId.replace(/-/g, '')}_forgedtail456`,
     );
     assert.equal(forged.status, 404, 'forged key rejected');
 
@@ -391,7 +480,7 @@ describe('widget: visitor_init by public key', () => {
 
   it('rejects forged and revoked keys', async () => {
     const forged = await post('/widget/v1/visitor_init', {
-      publicKey: `pk_${owner.workspaceId.replace(/-/g, '')}_forgedtail789`,
+      publicKey: `qvse_${owner.workspaceId.replace(/-/g, '')}_forgedtail789`,
       anonymousId: `vk-forged-${uniq()}`,
     });
     assert.equal(forged.status, 404, 'forged key rejected');
@@ -463,4 +552,3 @@ describe('visitor attributes (setAttributes) + visitors API', () => {
     assert.equal(ghost.status, 404);
   });
 });
-

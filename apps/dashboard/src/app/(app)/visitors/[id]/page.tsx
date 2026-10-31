@@ -44,7 +44,7 @@ export default function VisitorDetailPage() {
           </Link>
           <span className="back-title">{visitor?.name ?? `Visitor ${visitorId.slice(0, 8)}`}</span>
         </div>
-        {error && <div className="alert error">{error}</div>}
+        {error && <div className="alert">{error}</div>}
         {visitor && (
           <>
             <div className="card">

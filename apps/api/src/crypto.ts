@@ -95,3 +95,47 @@ export function decryptSecret(payload: string): string {
   ]);
   return dec.toString('utf8');
 }
+
+// --- Secret vault (key id + tenant-bound AAD) -------------------------------
+// Format: v1.<kid>.<iv>.<tag>.<ct> (all base64url). New writes use the newest
+// key id; reads select the key by id. Tenant id is bound as AAD.
+const vaultKeys = (): Record<string, Buffer> => {
+  const raw = process.env.ENCRYPTION_KEYS;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      const out: Record<string, Buffer> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        out[k] = /^[0-9a-f]{64}$/i.test(v) ? Buffer.from(v, 'hex') : createHash('sha256').update(v).digest();
+      }
+      return out;
+    } catch {
+      // fall through
+    }
+  }
+  return { '1': encKey() };
+};
+
+export function seal(plain: string, tenantId: string, kid = '1'): string {
+  const keys = vaultKeys();
+  const key = (keys[kid] ?? keys[Object.keys(keys)[0]!])!;
+  const iv = randomBytes(12);
+  const c = createCipheriv('aes-256-gcm', key, iv);
+  c.setAAD(Buffer.from(tenantId, 'utf8'));
+  const ct = Buffer.concat([c.update(plain, 'utf8'), c.final()]);
+  return ['v1', kid, iv.toString('base64url'), c.getAuthTag().toString('base64url'), ct.toString('base64url')].join('.');
+}
+
+export function openSealed(token: string, tenantId: string): string {
+  const parts = token.split('.');
+  if (parts.length !== 5 || parts[0] !== 'v1') throw new Error('malformed sealed token');
+  const [, kid, iv, tag, ct] = parts;
+  const keys = vaultKeys();
+  const key = keys[kid!];
+  if (!key) throw new Error('unknown key id');
+  const d = createDecipheriv('aes-256-gcm', key, Buffer.from(iv!, 'base64url'));
+  d.setAAD(Buffer.from(tenantId, 'utf8'));
+  d.setAuthTag(Buffer.from(tag!, 'base64url'));
+  const dec = Buffer.concat([d.update(Buffer.from(ct!, 'base64url')), d.final()]);
+  return dec.toString('utf8');
+}

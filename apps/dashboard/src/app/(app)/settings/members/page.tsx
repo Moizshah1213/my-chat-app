@@ -1,179 +1,337 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, type Member, type Role } from '@/lib/api';
+import { api, API_URL, type Invitation, type Member, type Role } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { Check, Copy, Mail, Plus, Trash2, Users } from 'lucide-react';
 
-/** Team management: members list, invite (token shown once), roles, removal. */
+function displayDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+}
+
+function initials(name: string | null, email: string) {
+  const label = name?.trim() || email;
+  return label.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
 export default function MembersPage() {
   const { user, role: myRole } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [email, setEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>('agent');
-  const [inviteToken, setInviteToken] = useState('');
+  const [inviteId, setInviteId] = useState('');
+  const [inviteUrl, setInviteUrl] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
+    setError('');
     try {
-      setMembers(await api.listMembers());
+      const [memberRows, invitationRows] = await Promise.all([
+        api.listMembers(),
+        api.listInvitations(),
+      ]);
+      const workspaceMembers = [...memberRows];
+      if (user && myRole && !workspaceMembers.some((member) => member.userId === user.id)) {
+        workspaceMembers.unshift({
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          role: myRole,
+          createdAt: '',
+        });
+      }
+      workspaceMembers.sort((a, b) => Number(b.userId === user?.id) - Number(a.userId === user?.id));
+      setMembers(workspaceMembers);
+      setInvitations(invitationRows.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load members');
+      setError(err instanceof Error ? err.message : 'Failed to load team');
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [myRole, user]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const canManage = myRole === 'owner' || myRole === 'admin';
+  const canInvite = myRole === 'owner' || myRole === 'admin';
+  const canChangeRoles = myRole === 'owner';
+  const pendingCount = invitations.filter((invitation) => invitation.status === 'pending').length;
 
-  async function onInvite(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim()) return;
+  async function onInvite(event: React.FormEvent) {
+    event.preventDefault();
     setError('');
+    setNotice('');
+    setInviteId('');
+    setInviteUrl('');
     setBusy(true);
     try {
-      const res = await api.invite(email.trim(), inviteRole);
-      setInviteToken(res.token);
+      const result = await api.invite(email.trim(), inviteRole);
+      setInviteId(result.invitationId);
+      setInviteUrl(result.inviteUrl || `${window.location.origin}/invite/${encodeURIComponent(result.token)}`);
       setEmail('');
+      setNotice('Invitation created. Copy the secure link and share it with your teammate.');
+      await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to invite');
+      setError(err instanceof Error ? err.message : 'Failed to create invitation');
     } finally {
       setBusy(false);
     }
   }
 
-  async function onChangeRole(userId: string, role: Role) {
-    setError('');
+  async function copyInviteLink() {
     try {
-      await api.updateRole(userId, role);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to change role');
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setNotice('Invite link copied to clipboard.');
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('Could not access the clipboard. Select and copy the invite link manually.');
     }
   }
 
-  async function onRemove(userId: string) {
+  async function onChangeRole(member: Member, role: Role) {
     setError('');
+    setNotice('');
+    setActionId(member.userId);
     try {
-      await api.removeMember(userId);
+      await api.updateRole(member.userId, role);
+      setNotice(`${member.name || member.email} is now ${role}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to change role');
+    } finally {
+      setActionId('');
+    }
+  }
+
+  async function onRemove(member: Member) {
+    if (!window.confirm(`Remove ${member.name || member.email} from this workspace?`)) return;
+    setError('');
+    setNotice('');
+    setActionId(member.userId);
+    try {
+      await api.removeMember(member.userId);
+      setNotice(`${member.name || member.email} was removed from the workspace.`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove member');
+    } finally {
+      setActionId('');
+    }
+  }
+
+  async function onCancelInvitation(invitation: Invitation) {
+    if (!window.confirm(`Cancel the invitation sent to ${invitation.email}? Its link will stop working.`)) return;
+    setError('');
+    setNotice('');
+    setActionId(invitation.id);
+    try {
+      await api.cancelInvitation(invitation.id);
+      setNotice(`Invitation for ${invitation.email} was cancelled.`);
+      if (inviteId === invitation.id) {
+        setInviteId('');
+        setInviteUrl('');
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel invitation');
+    } finally {
+      setActionId('');
     }
   }
 
   return (
-    <div className="page">
-      {error && <div className="alert error">{error}</div>}
-        {inviteToken && (
-          <div className="alert success">
-            <strong>Invitation created — share this link (dev stand-in for email):</strong>
-            <div className="mono" style={{ marginTop: 6, wordBreak: 'break-all' }}>
-              {inviteToken}
+    <div className="page team-page">
+      {error && <div className="alert error" role="alert">{error}</div>}
+      {notice && <div className="alert success" role="status">{notice}</div>}
+
+      {inviteUrl && (
+        <section className="card invite-link-card">
+          <div className="invite-link-heading">
+            <span className="invite-link-icon"><Mail size={18} /></span>
+            <div>
+              <h2>Invitation link ready</h2>
+              <p className="muted">Share this link with the teammate you invited. It expires in 7 days.</p>
             </div>
-            <button
-              className="btn s"
-              style={{ marginTop: 8 }}
-              onClick={() => setInviteToken('')}
-            >
-              Dismiss
+          </div>
+          <div className="invite-link-row">
+            <input aria-label="Invitation link" readOnly value={inviteUrl} onFocus={(event) => event.target.select()} />
+            <button type="button" className="btn" onClick={() => void copyInviteLink()}>
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <button type="button" className="icon-btn" aria-label="Dismiss invitation link" onClick={() => setInviteUrl('')}>
+              ×
             </button>
           </div>
-        )}
+        </section>
+      )}
 
-        {canManage && (
-          <div className="card">
-            <h2>Invite a teammate</h2>
-            <form onSubmit={onInvite} style={{ display: 'flex', gap: 10 }}>
-              <div className="field" style={{ flex: 2, marginBottom: 0 }}>
-                <input
-                  type="email"
-                  placeholder="teammate@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as Role)}
-                  aria-label="Role"
-                >
-                  <option value="agent">Agent</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <button className="btn" type="submit" disabled={busy}>
-                {busy ? 'Inviting…' : 'Send invite'}
-              </button>
-            </form>
+      {canInvite && (
+        <section className="card team-invite-card">
+          <div className="team-section-heading">
+            <div>
+              <h2>Invite a teammate</h2>
+              <p className="muted">Add someone to your workspace and choose their access level.</p>
+            </div>
           </div>
-        )}
+          <form className="team-invite-form" onSubmit={(event) => void onInvite(event)}>
+            <label className="field">
+              <span>Work email</span>
+              <input
+                type="email"
+                autoComplete="email"
+                placeholder="teammate@company.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Role</span>
+              <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Role)}>
+                <option value="agent">Agent</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <button className="btn" type="submit" disabled={busy}>
+              <Plus size={16} />
+              {busy ? 'Creating invite…' : 'Create invite'}
+            </button>
+          </form>
+        </section>
+      )}
 
-        <div className="card">
-          <h2>Members</h2>
-          <table className="list">
+      <section className="card team-members-card">
+        <div className="team-section-heading">
+          <div>
+            <h2>Team members</h2>
+            <p className="muted">People who can access this workspace.</p>
+          </div>
+          <span className="team-count"><Users size={15} /> {members.length} {members.length === 1 ? 'member' : 'members'}</span>
+        </div>
+        <div className="team-table-wrap">
+          <table className="team-table">
             <thead>
-              <tr>
-                <th>User</th>
-                <th>Role</th>
-                <th>Joined</th>
-                <th />
-              </tr>
+              <tr><th>Member</th><th>Access</th><th /></tr>
             </thead>
             <tbody>
-              {members.map((m) => {
-                const isOwner = m.role === 'owner';
-                const isMe = m.userId === user?.id;
+              {members.map((member) => {
+                const isOwner = member.role === 'owner';
+                const isMe = member.userId === user?.id;
                 return (
-                  <tr key={m.userId}>
-                    <td className="mono">
-                      {m.userId.slice(0, 13)}… {isMe && <span className="muted">(you)</span>}
+                  <tr key={member.userId}>
+                    <td>
+                      <div className="team-user">
+                        <span className="team-avatar">
+                          {member.userId === user?.id && user.avatarUrl
+                            ? <img src={user.avatarUrl.startsWith('/') ? `${API_URL}${user.avatarUrl}` : user.avatarUrl} alt="" />
+                            : initials(member.name, member.email)}
+                        </span>
+                        <span className="team-user-copy">
+                          <strong>{member.name || 'Name not set'} {isMe && <small>(you)</small>}</strong>
+                          <span>{member.email}</span>
+                        </span>
+                      </div>
                     </td>
                     <td>
-                      {canManage && !isOwner ? (
+                      {canChangeRoles && !isOwner ? (
                         <select
-                          value={m.role}
-                          onChange={(e) => void onChangeRole(m.userId, e.target.value as Role)}
-                          aria-label={`Role for ${m.userId}`}
-                          className="pill-select"
+                          value={member.role}
+                          onChange={(event) => void onChangeRole(member, event.target.value as Role)}
+                          aria-label={`Role for ${member.name || member.email}`}
+                          className="team-role-select"
+                          disabled={actionId === member.userId}
                         >
-                          <option value="agent">agent</option>
-                          <option value="admin">admin</option>
-                          <option value="owner">owner</option>
+                          <option value="agent">Agent</option>
+                          <option value="admin">Admin</option>
                         </select>
-                      ) : (
-                        <span className={`badge ${isOwner ? 'closed' : 'open'}`}>{m.role}</span>
-                      )}
+                      ) : <span className={`team-role-label role-${member.role}`}>{member.role}</span>}
                     </td>
-                    <td className="muted">{new Date(m.createdAt).toLocaleDateString()}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      {canManage && !isOwner && !isMe && (
-                        <button className="btn danger sm" onClick={() => void onRemove(m.userId)}>
-                          Remove
+                    <td className="team-actions">
+                      {canInvite && !isOwner && !isMe && (
+                        <button
+                          type="button"
+                          className="team-remove"
+                          aria-label={`Remove ${member.name || member.email} from the workspace`}
+                          title="Remove member"
+                          disabled={actionId === member.userId}
+                          onClick={() => void onRemove(member)}
+                        >
+                          <Trash2 size={15} />
                         </button>
                       )}
                     </td>
                   </tr>
                 );
               })}
-              {members.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="muted">
-                    No members.
-                  </td>
-                </tr>
+              {!loading && members.length === 0 && (
+                <tr><td colSpan={3} className="team-empty">No members found.</td></tr>
+              )}
+              {loading && (
+                <tr><td colSpan={3} className="team-empty">Loading team…</td></tr>
               )}
             </tbody>
           </table>
-          <p className="muted" style={{ marginTop: 12, marginBottom: 0 }}>
-            Only owners can change roles. Role changes take effect on the member&apos;s next token
-            refresh.
-          </p>
         </div>
-      </div>
+        <p className="team-footnote">Only workspace owners can change member roles. Role changes apply after the member refreshes their session.</p>
+      </section>
+
+      <section className="card team-invitations-card">
+        <div className="team-section-heading">
+          <div>
+            <h2>Invitations</h2>
+            <p className="muted">Track invites sent to teammates and manage links that are still open.</p>
+          </div>
+          <span className="team-count">{pendingCount} pending</span>
+        </div>
+        <div className="team-table-wrap">
+          <table className="team-table">
+            <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Sent</th><th>Expires</th><th /></tr></thead>
+            <tbody>
+              {invitations.map((invitation) => (
+                <tr key={invitation.id}>
+                  <td><span className="team-invite-email">{invitation.email}</span></td>
+                  <td><span className={`team-role-badge role-${invitation.role}`}>{invitation.role}</span></td>
+                  <td><span className={`team-status ${invitation.status}`}>{invitation.status}</span></td>
+                  <td className="team-date">{displayDate(invitation.createdAt)}</td>
+                  <td className="team-date">{displayDate(invitation.expiresAt)}</td>
+                  <td className="team-actions">
+                    {canInvite && invitation.status === 'pending' && (
+                      <button
+                        type="button"
+                        className="team-remove"
+                        disabled={actionId === invitation.id}
+                        onClick={() => void onCancelInvitation(invitation)}
+                      >
+                        <Trash2 size={14} /> Cancel
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!loading && invitations.length === 0 && (
+                <tr><td colSpan={6} className="team-empty">No invitations yet.</td></tr>
+              )}
+              {loading && (
+                <tr><td colSpan={6} className="team-empty">Loading invitations…</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }

@@ -1,8 +1,8 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   api,
   getAccessToken,
@@ -13,33 +13,79 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { connectAgentSocket, joinConversation, type Socket } from '@/lib/socket';
-import InboxList, { timeAgo } from '../../components/inbox-list';
-import {
-  ArrowLeftIcon,
-  ChatIcon,
-  ChevronDownIcon,
-  EditIcon,
-  SendIcon,
-  SmileIcon,
-  UserIcon,
-} from '@/components/icons';
+import { setConversationNotificationsPaused } from '@/lib/notifications';
+import InboxList from '@/app/(app)/components/inbox-list';
+import { ArrowLeftIcon, Bell, BellOff, MoreVertical, Pencil, SendIcon, SmileIcon, Trash2, UserIcon, X } from 'lucide-react';
 
 const TIME = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' });
-const EMOJIS = ['\uD83D\uDC4D', '\uD83C\uDF89', '\uD83D\uDE04', '\uD83D\uDE4F', '\u2705', '\uD83D\uDD25', '\u2764\uFE0F', '\uD83D\uDE05'];
+const EMOJIS = ['👍', '🎉', '😄', '🙏', '✅', '🔥', '❤️', '😅'];
+const GROUP_GAP_MS = 5 * 60 * 1000;
 
-function whenLabel(iso: string): string {
-  const d = new Date(iso);
-  const sameDay = d.toDateString() === new Date().toDateString();
-  const day = sameDay
-    ? 'Today'
-    : d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-  return `${day} ${TIME.format(d)}`;
+type Live = 'connecting' | 'live' | 'offline';
+type TypingSender = 'visitor' | 'ai' | null;
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || 'V';
 }
 
-/** Conversation detail: inbox list + thread (channel tabs, bubbles, composer)
- *  + right-hand contact panel (status, visitor details, sections, actions). */
+function timeLabel(iso?: string): string {
+  const d = new Date(iso ?? '');
+  return isNaN(d.getTime()) ? '' : TIME.format(d);
+}
+
+function timeAgo(iso: string): string {
+  const timestamp = new Date(iso).getTime();
+  if (isNaN(timestamp)) return 'unknown';
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function dayKey(m: Message): string {
+  const d = new Date(m.createdAt ?? '');
+  return isNaN(d.getTime()) ? '' : d.toDateString();
+}
+
+function dayLabel(m: Message): string {
+  const d = new Date(m.createdAt ?? '');
+  if (isNaN(d.getTime())) return '';
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+}
+
+function buildRows(messages: Message[]) {
+  const close = (a?: Message, b?: Message) =>
+    !!a &&
+    !!b &&
+    a.senderType === b.senderType &&
+    dayKey(a) === dayKey(b) &&
+    Math.abs(new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime()) <
+      GROUP_GAP_MS;
+  return messages.map((m, i) => {
+    const prev = messages[i - 1];
+    const next = messages[i + 1];
+    return {
+      m,
+      day: !prev || dayKey(prev) !== dayKey(m) ? dayLabel(m) : '',
+      start: !close(prev, m),
+      end: !close(m, next),
+    };
+  });
+}
+
 export default function ConversationDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const conversationId = params.id;
   const { user } = useAuth();
 
@@ -49,15 +95,52 @@ export default function ConversationDetailPage() {
   const [draft, setDraft] = useState('');
   const [subject, setSubject] = useState('');
   const [error, setError] = useState('');
-  const [typing, setTyping] = useState(false);
+  const [typingBy, setTypingBy] = useState<TypingSender>(null);
   const [online, setOnline] = useState(false);
+  const [live, setLive] = useState<Live>('connecting');
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [notificationsPaused, setNotificationsPaused] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [actionMenuMessageId, setActionMenuMessageId] = useState<string | null>(null);
+  const [retrySend, setRetrySend] = useState(false);
+  const [busyAction, setBusyAction] = useState(false);
 
   const seenIds = useRef(new Set<string>());
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
-  const socketRef = useRef<Socket | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const agentTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const agentTypingLastAt = useRef(0);
+  const activeSocket = useRef<Socket | null>(null);
+  const typingSenderRef = useRef<TypingSender>(null);
+  const visitorIdRef = useRef<string | undefined>(undefined);
+  const pendingSend = useRef<{ body: string; key: string } | null>(null);
+
+  useEffect(() => {
+    if (!actionMenuMessageId) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (event.target instanceof Element && !event.target.closest('[data-message-action-menu]')) {
+        setActionMenuMessageId(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActionMenuMessageId(null);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [actionMenuMessageId]);
+
+  const closed = conversation?.status === 'closed';
+
+  const updateTypingSender = (sender: TypingSender) => {
+    typingSenderRef.current = sender;
+    setTypingBy(sender);
+  };
 
   const appendMessage = useCallback((msg: Message) => {
     if (seenIds.current.has(msg.id)) return;
@@ -65,18 +148,25 @@ export default function ConversationDetailPage() {
     setMessages((prev) => [...prev, msg]);
   }, []);
 
-  // Load conversation + first page of history.
   useEffect(() => {
     let cancelled = false;
+    seenIds.current = new Set();
+    setMessages([]);
+    setConversation(null);
+    setVisitor(null);
+    updateTypingSender(null);
+    setError('');
     (async () => {
       try {
-        const [conv, page] = await Promise.all([
+        const [conv, page, notificationPreference] = await Promise.all([
           api.getConversation(conversationId),
           api.listMessages(conversationId),
+          api.getNotificationPreference(conversationId),
         ]);
         if (cancelled) return;
         setConversation(conv);
         setSubject(conv.subject ?? '');
+        setNotificationsPaused(notificationPreference.paused);
         for (const m of page.items) seenIds.current.add(m.id);
         setMessages(page.items);
       } catch (err) {
@@ -88,9 +178,9 @@ export default function ConversationDetailPage() {
     };
   }, [conversationId]);
 
-  // Contact panel: resolve the visitor behind this conversation.
   useEffect(() => {
     const id = conversation?.visitorId;
+    visitorIdRef.current = id ?? undefined;
     if (!id) return;
     let cancelled = false;
     api
@@ -104,57 +194,191 @@ export default function ConversationDetailPage() {
     };
   }, [conversation?.visitorId]);
 
-  // Realtime: visitor messages, typing, presence, conversation updates.
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return;
-    const socket = connectAgentSocket(token, {
-      onMessage: (payload) => {
-        const msg = payload as Message & { conversationId: string };
-        if (msg.conversationId === conversationId) appendMessage(msg);
-      },
-      onTyping: (payload) => {
-        const p = payload as { conversationId: string; typing: boolean };
-        if (p.conversationId !== conversationId) return;
-        setTyping(p.typing);
-        if (typingTimer.current) clearTimeout(typingTimer.current);
-        typingTimer.current = setTimeout(() => setTyping(false), 3000);
-      },
-      onVisitorPresence: (payload) => {
-        const p = payload as { visitorId: string; online: boolean };
-        if (p.visitorId === conversation?.visitorId) setOnline(p.online);
-      },
-      onConversationUpdated: (payload) => {
-        const p = payload as { conversationId?: string };
-        if (p.conversationId === conversationId) {
-          void api
-            .getConversation(conversationId)
-            .then(setConversation)
-            .catch(() => undefined);
-        }
-      },
-    });
-    socketRef.current = socket;
-    if (conversation) joinConversation(socket, conversationId);
-    return () => {
-      socket.close();
-      socketRef.current = null;
+    let socket: Socket | null = null;
+    let waitTimer: ReturnType<typeof setInterval> | null = null;
+
+    const start = (): boolean => {
+      const token = getAccessToken();
+      if (!token) return false;
+      const s = connectAgentSocket(token, {
+        onMessage: (payload) => {
+          const p = payload as Message & { conversationId?: string; conversation_id?: string };
+          const cid = p.conversationId ?? p.conversation_id;
+          if (cid === conversationId) {
+            if (p.senderType === 'ai') updateTypingSender(null);
+            appendMessage(p);
+          }
+        },
+        onMessageUpdated: (payload) => {
+          const message = payload as Message;
+          if (message.conversationId === conversationId) {
+            setMessages((current) => current.map((item) => item.id === message.id ? message : item));
+          }
+        },
+        onMessageDeleted: (payload) => {
+          const event = payload as { conversationId: string; messageId: string };
+          if (event.conversationId === conversationId) {
+            setMessages((current) => current.filter((item) => item.id !== event.messageId));
+          }
+        },
+        onConversationDeleted: (payload) => {
+          if ((payload as { conversationId?: string }).conversationId === conversationId) {
+            router.replace('/conversations');
+          }
+        },
+        onTyping: (payload) => {
+          const p = payload as { conversationId: string; typing: boolean; by?: string };
+          if (p.conversationId !== conversationId) return;
+          const sender = p.by === 'ai' ? 'ai' : p.by === 'visitor' ? 'visitor' : null;
+          if (p.typing && !sender) return;
+          if (!p.typing && typingSenderRef.current !== sender) return;
+          updateTypingSender(p.typing ? sender : null);
+          if (typingTimer.current) clearTimeout(typingTimer.current);
+          if (p.typing) typingTimer.current = setTimeout(() => updateTypingSender(null), 3000);
+        },
+        onVisitorPresence: (payload) => {
+          const p = payload as { visitorId: string; online: boolean };
+          if (p.visitorId === visitorIdRef.current) setOnline(p.online);
+        },
+        onConversationUpdated: (payload) => {
+          const p = payload as { conversationId?: string };
+          if (p.conversationId === conversationId) {
+            void api
+              .getConversation(conversationId)
+              .then(setConversation)
+              .catch(() => undefined);
+          }
+        },
+      });
+      socket = s;
+      activeSocket.current = s;
+      const join = () => {
+        joinConversation(s, conversationId);
+        setLive('live');
+      };
+      s.on('connect', join);
+      s.on('disconnect', () => setLive('offline'));
+      s.on('connect_error', () => setLive('offline'));
+      if (s.connected) join();
+      return true;
     };
-  }, [conversationId, conversation, appendMessage]);
+
+    setLive('connecting');
+    if (!start()) {
+      waitTimer = setInterval(() => {
+        if (start() && waitTimer) {
+          clearInterval(waitTimer);
+          waitTimer = null;
+        }
+      }, 500);
+    }
+
+    return () => {
+      if (waitTimer) clearInterval(waitTimer);
+      if (agentTypingTimer.current) clearTimeout(agentTypingTimer.current);
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      socket?.emit('typing', { conversationId, typing: false });
+      if (activeSocket.current === socket) activeSocket.current = null;
+      socket?.close();
+    };
+  }, [conversationId, appendMessage, router]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length, typing]);
+    if (live === 'live') return;
+    const t = setInterval(() => {
+      api
+        .listMessages(conversationId)
+        .then((page) => {
+          for (const m of page.items) appendMessage(m);
+        })
+        .catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(t);
+  }, [live, conversationId, appendMessage]);
 
-  async function onSend(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages.length, typingBy]);
+
+  function emitAgentTyping(typing: boolean) {
+    if (typing) {
+      const now = Date.now();
+      if (now - agentTypingLastAt.current > 1000) {
+        activeSocket.current?.emit('typing', { conversationId, typing: true });
+        agentTypingLastAt.current = now;
+      }
+      if (agentTypingTimer.current) clearTimeout(agentTypingTimer.current);
+      agentTypingTimer.current = setTimeout(() => {
+        activeSocket.current?.emit('typing', { conversationId, typing: false });
+        agentTypingLastAt.current = 0;
+      }, 1500);
+    } else {
+      if (agentTypingTimer.current) clearTimeout(agentTypingTimer.current);
+      activeSocket.current?.emit('typing', { conversationId, typing: false });
+      agentTypingLastAt.current = 0;
+    }
+  }
+
+  async function onSend(e?: React.FormEvent) {
+    e?.preventDefault();
     const body = draft.trim();
-    if (!body) return;
+    if (!body || (closed && !editingMessageId) || busyAction) return;
+    setBusyAction(true);
+    if (agentTypingTimer.current) clearTimeout(agentTypingTimer.current);
+    emitAgentTyping(false);
     setDraft('');
+    if (composerRef.current) composerRef.current.style.height = 'auto';
     try {
-      appendMessage(await api.sendMessage(conversationId, body));
+      if (editingMessageId) {
+        const message = await api.editMessage(conversationId, editingMessageId, body);
+        setMessages((current) => current.map((item) => item.id === message.id ? message : item));
+        setEditingMessageId(null);
+      } else {
+        const key = pendingSend.current?.body === body ? pendingSend.current.key : crypto.randomUUID();
+        pendingSend.current = { body, key };
+        appendMessage(await api.sendMessage(conversationId, body, key));
+        pendingSend.current = null;
+      }
+      setRetrySend(false);
     } catch (err) {
+      setDraft(body);
       setError(err instanceof Error ? err.message : 'Send failed');
+      setRetrySend(!editingMessageId);
+    } finally {
+      setBusyAction(false);
+    }
+  }
+
+  async function toggleNotifications() {
+    try {
+      const result = await api.updateNotificationPreference(conversationId, !notificationsPaused);
+      setNotificationsPaused(result.paused);
+      setConversationNotificationsPaused(conversationId, result.paused);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update notification settings');
+    }
+  }
+
+  async function deleteConversation() {
+    if (!window.confirm('Delete this conversation and hide its messages from the workspace?')) return;
+    try {
+      await api.deleteConversation(conversationId);
+      router.replace('/conversations');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete conversation');
+    }
+  }
+
+  async function deleteMessage(message: Message) {
+    if (!window.confirm('Delete this message?')) return;
+    try {
+      await api.deleteMessage(conversationId, message.id);
+      setMessages((current) => current.filter((item) => item.id !== message.id));
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete message');
     }
   }
 
@@ -175,7 +399,6 @@ export default function ConversationDetailPage() {
     }
   }
 
-  /** Subject is editable here (PATCH /conversations/:id). */
   async function saveSubject() {
     if (!conversation) return;
     const next = subject.trim();
@@ -197,129 +420,181 @@ export default function ConversationDetailPage() {
   const displayName =
     visitor?.name ??
     (conversation?.visitorId ? `Visitor ${conversation.visitorId.slice(0, 8)}` : 'Visitor');
-  const [first = '', ...restParts] = displayName.split(' ');
-  const last = restParts.join(' ') || '—';
   const metaEntries = Object.entries(visitor?.meta ?? {});
+  const others = (visitor?.conversations ?? []).filter((c) => c.id !== conversationId);
+  const rows = buildRows(messages);
+  const sub = online
+    ? 'Online'
+    : visitor?.lastSeen
+      ? `Last seen ${timeAgo(visitor.lastSeen)}`
+      : 'Offline';
 
   return (
-    <div className="inbox with-contact">
+    <div className={`inbox${infoOpen ? ' cv-info' : ''}`}>
       <InboxList selectedId={conversationId} />
 
-      <div className="inbox-detail thread">
-        <div className="thread-head">
-          <Link
-            href="/conversations"
-            className="icon-btn"
-            aria-label="Back to inbox"
-            data-tip="Back to inbox"
-          >
+      <div className="cv-thread">
+        <div className="cv-head">
+          <Link href="/conversations" className="icon-btn cv-back" aria-label="Back to inbox">
             <ArrowLeftIcon size={17} />
           </Link>
-          <span
-            className={`status-dot${online ? ' online' : ''}`}
-            title={online ? 'Visitor online' : 'Visitor offline'}
-          />
-          <span className="title">{conversation?.subject ?? displayName}</span>
-          {conversation && (
-            <span className={`badge ${conversation.status}`}>{conversation.status}</span>
+          <span className="cv-avatar">{initials(displayName)}</span>
+          <div className="cv-who">
+            <b>{conversation?.subject || displayName}</b>
+            <small>
+              <i className={`cv-dot${online ? ' on' : ''}`} />
+              {sub}
+            </small>
+          </div>
+          {conversation && !closed && !conversation.assignedTo && (
+            <button className="cv-ghost" type="button" onClick={() => void assignToMe()}>
+              Assign to me
+            </button>
           )}
-        </div>
-
-        <div className="tabs" role="tablist" aria-label="Channels">
-          <button className="tab active" type="button" role="tab" aria-selected="true">
-            All
+          <select
+            className="cv-select"
+            aria-label="Conversation status"
+            value={conversation?.status ?? 'open'}
+            disabled={!conversation}
+            onChange={(e) => void setStatus(e.target.value as ConversationStatus)}
+          >
+            <option value="open">Open</option>
+            <option value="pending">Pending</option>
+            <option value="closed">Closed</option>
+          </select>
+          <button
+            className={`icon-btn${infoOpen ? ' cv-on' : ''}`}
+            type="button"
+            aria-label="Contact details"
+            aria-pressed={infoOpen}
+            onClick={() => setInfoOpen((o) => !o)}
+          >
+            <UserIcon size={16} />
           </button>
           <button
-            className="tab"
+            className="icon-btn"
             type="button"
-            role="tab"
-            aria-selected="false"
-            disabled
-            title="Channel not connected"
+            aria-label={notificationsPaused ? 'Resume notifications' : 'Pause notifications'}
+            aria-pressed={notificationsPaused}
+            onClick={() => void toggleNotifications()}
           >
-            SMS
+            {notificationsPaused ? <BellOff size={16} /> : <Bell size={16} />}
           </button>
-          <button
-            className="tab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            disabled
-            title="Channel not connected"
-          >
-            Email
-          </button>
-          <button
-            className="tab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            disabled
-            title="Channel not connected"
-          >
-            Messenger
+          <button className="icon-btn" type="button" aria-label="Delete conversation" onClick={() => void deleteConversation()}>
+            <Trash2 size={16} />
           </button>
         </div>
 
         {error && (
-          <div className="alert error" style={{ margin: 12 }}>
+          <div className="alert cv-alert">
             {error}
+            {retrySend && <button className="cv-retry" type="button" onClick={() => void onSend()}>Retry send</button>}
           </div>
         )}
 
-        <div className="chat-messages">
-          {messages.map((m) => (
-            <div key={m.id} className={`msg ${m.senderType}`}>
-              <span className="msg-meta">
-                <span className="sender">
-                  {m.senderType === 'agent' ? user?.name || 'You' : displayName}
-                </span>
-                <ChatIcon size={12} />
-                <span className="when">{whenLabel(m.createdAt)}</span>
-              </span>
-              <span className="body">{m.body}</span>
-            </div>
+        <div className="cv-msgs">
+          {rows.map(({ m, day, start, end }) => (
+            <Fragment key={m.id}>
+              {day && <div className="cv-day">{day}</div>}
+              <div
+                className={`cv-row ${m.senderType === 'agent' ? 'a' : m.senderType === 'ai' ? 'ai' : 'v'}${start ? ' start' : ''}${end ? ' end' : ''}`}
+              >
+                <div className="cv-message-wrap">
+                {m.senderType === 'agent' && m.senderId === user?.id && (
+                  <div className="cv-message-actions" data-message-action-menu>
+                    <button
+                      className="cv-message-menu-trigger"
+                      type="button"
+                      aria-label="More message actions"
+                      aria-haspopup="menu"
+                      aria-expanded={actionMenuMessageId === m.id}
+                      onClick={() => setActionMenuMessageId((current) => current === m.id ? null : m.id)}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    {actionMenuMessageId === m.id && (
+                      <div className="cv-message-menu" role="menu" aria-label="Message actions">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setActionMenuMessageId(null);
+                            setEditingMessageId(m.id);
+                            setDraft(m.body);
+                            composerRef.current?.focus();
+                          }}
+                        >
+                          <Pencil size={14} />
+                          <span>Edit</span>
+                        </button>
+                        <button type="button" role="menuitem" className="danger" onClick={() => {
+                          setActionMenuMessageId(null);
+                          void deleteMessage(m);
+                        }}>
+                          <Trash2 size={14} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                  <div className="cv-bubble">
+                    {(String(m.senderType) === 'ai' || String(m.senderType) === 'bot') && (
+                      <span className="cv-tag">AI</span>
+                    )}
+                    {m.body}
+                  </div>
+                </div>
+                {end && <span className="cv-time">{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</span>}
+              </div>
+            </Fragment>
           ))}
-          <div ref={messagesEndRef} />
+          {typingBy && (
+            <div className={`cv-row ${typingBy === 'ai' ? 'ai' : 'v'} start end`}>
+              <div className="cv-typing" aria-label={typingBy === 'ai' ? 'AI assistant is typing' : 'Visitor is typing'}>
+                <i />
+                <i />
+                <i />
+                <span>{typingBy === 'ai' ? 'AI assistant is typing' : 'Visitor is typing'}</span>
+              </div>
+            </div>
+          )}
+          <div ref={endRef} />
         </div>
 
-        <div className="typing-line">{typing ? 'Visitor is typing…' : ''}</div>
-
-        <form className="chat-composer" onSubmit={onSend}>
-          <input
-            className="subject-input"
-            placeholder="Subject"
-            aria-label="Subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            onBlur={() => void saveSubject()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void saveSubject();
-              }
-            }}
-          />
-          <div className="composer-row">
+        {closed && !editingMessageId ? (
+          <div className="cv-closed">
+            <span>This conversation is closed.</span>
+            <button className="cv-ghost" type="button" onClick={() => void setStatus('open')}>
+              Reopen
+            </button>
+          </div>
+        ) : (
+          <form className="cv-composer" onSubmit={onSend}>
+            {editingMessageId && (
+              <button
+                className="cv-icon"
+                type="button"
+                aria-label="Cancel edit"
+                onClick={() => { setEditingMessageId(null); setDraft(''); }}
+              >
+                <X size={15} />
+              </button>
+            )}
             <div className="emoji-wrap">
               <button
-                className="icon-btn"
+                className="cv-icon"
                 type="button"
                 aria-label="Insert emoji"
                 aria-expanded={emojiOpen}
                 onClick={() => setEmojiOpen((o) => !o)}
               >
-                <SmileIcon size={17} />
+                <SmileIcon size={18} />
               </button>
               {emojiOpen && (
                 <div className="emoji-pop">
                   {EMOJIS.map((e) => (
-                    <button
-                      key={e}
-                      type="button"
-                      aria-label="Insert emoji"
-                      onClick={() => insertEmoji(e)}
-                    >
+                    <button key={e} type="button" aria-label="Insert emoji" onClick={() => insertEmoji(e)}>
                       {e}
                     </button>
                   ))}
@@ -329,171 +604,100 @@ export default function ConversationDetailPage() {
             <textarea
               ref={composerRef}
               rows={1}
-              placeholder={
-                conversation?.status === 'closed' ? 'Conversation is closed' : 'Enter text'
-              }
+              placeholder="Write a reply…"
               aria-label="Reply"
               value={draft}
-              disabled={conversation?.status === 'closed'}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                emitAgentTyping(Boolean(e.target.value));
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
+                  void onSend();
                 }
               }}
             />
-            <button
-              className="btn"
-              type="submit"
-              disabled={conversation?.status === 'closed' || !draft.trim()}
-            >
-              <SendIcon size={15} />
-              Send
+            <button className="cv-send" type="submit" aria-label={editingMessageId ? 'Save message' : 'Send'} disabled={!draft.trim() || busyAction}>
+              {editingMessageId ? <Pencil size={16} /> : <SendIcon size={16} />}
             </button>
-          </div>
-        </form>
+          </form>
+        )}
       </div>
 
-      <aside className="contact" aria-label="Contact details">
-        <div className="contact-head">
-          <label className="contact-status">
-            <UserIcon size={14} />
-            <select
-              aria-label="Conversation status"
-              value={conversation?.status ?? 'open'}
-              disabled={!conversation}
-              onChange={(e) => void setStatus(e.target.value as ConversationStatus)}
-            >
-              <option value="open">Open</option>
-              <option value="pending">Pending</option>
-              <option value="closed">Closed</option>
-            </select>
-            <ChevronDownIcon size={13} />
-          </label>
-        </div>
-
-        <div className="contact-body">
-          <div className="contact-title">
-            <h3>Contact Details</h3>
-            <Link
-              className="link-edit"
-              href={
-                conversation?.visitorId ? `/visitors/${conversation.visitorId}` : '/visitors'
-              }
-            >
-              <EditIcon size={13} />
-              EDIT
-            </Link>
-          </div>
-          <dl className="detail-rows">
-            <div className="detail-row">
-              <dt>First Name</dt>
-              <dd>{first || '—'}</dd>
+      {infoOpen && (
+        <aside className="cv-panel" aria-label="Contact details">
+          <h3>Details</h3>
+          <dl className="cv-kv">
+            <div>
+              <dt>Name</dt>
+              <dd>{visitor?.name ?? '—'}</dd>
             </div>
-            <div className="detail-row">
-              <dt>Last Name</dt>
-              <dd>{last}</dd>
-            </div>
-            <div className="detail-row">
+            <div>
               <dt>Email</dt>
               <dd>{visitor?.email ?? '—'}</dd>
             </div>
-            <div className="detail-row">
+            <div>
               <dt>Visitor ID</dt>
               <dd className="mono">{conversation?.visitorId?.slice(0, 12) ?? '—'}</dd>
             </div>
-            <div className="detail-row">
-              <dt>Status</dt>
-              <dd>
-                {conversation && (
-                  <span className={`badge ${conversation.status}`}>{conversation.status}</span>
-                )}
-              </dd>
+            <div>
+              <dt>First seen</dt>
+              <dd>{visitor ? new Date(visitor.firstSeen).toLocaleDateString() : '—'}</dd>
+            </div>
+            <div>
+              <dt>Last seen</dt>
+              <dd>{visitor ? timeAgo(visitor.lastSeen) : '—'}</dd>
             </div>
           </dl>
 
-          <details className="collapse">
-            <summary>
-              Attributes <span className="count-pill">{metaEntries.length}</span>
-              <ChevronDownIcon size={14} />
-            </summary>
-            {metaEntries.length === 0 ? (
-              <div className="muted small">No attributes captured.</div>
-            ) : (
-              <dl className="detail-rows">
+          <label className="cv-field">
+            <span>Subject</span>
+            <input
+              value={subject}
+              placeholder="Add a subject"
+              onChange={(e) => setSubject(e.target.value)}
+              onBlur={() => void saveSubject()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void saveSubject();
+                }
+              }}
+            />
+          </label>
+
+          {metaEntries.length > 0 && (
+            <>
+              <h4>Attributes</h4>
+              <dl className="cv-kv">
                 {metaEntries.map(([k, v]) => (
-                  <div className="detail-row" key={k}>
+                  <div key={k}>
                     <dt>{k}</dt>
                     <dd>{typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '—')}</dd>
                   </div>
                 ))}
               </dl>
-            )}
-          </details>
-
-          <details className="collapse">
-            <summary>
-              Conversations <span className="count-pill">{visitor?.conversations.length ?? 0}</span>
-              <ChevronDownIcon size={14} />
-            </summary>
-            {!visitor && <div className="muted small">Loading…</div>}
-            {visitor && visitor.conversations.length === 0 && (
-              <div className="muted small">No other conversations.</div>
-            )}
-            {(visitor?.conversations ?? []).map((c) => (
-              <Link
-                key={c.id}
-                className={`conv-mini${c.id === conversationId ? ' current' : ''}`}
-                href={`/conversations/${c.id}`}
-              >
-                <span className="who">{c.subject ?? 'Conversation'}</span>
-                <span className={`badge ${c.status}`}>{c.status}</span>
-                <span className="when">{timeAgo(c.lastMessageAt)}</span>
-              </Link>
-            ))}
-          </details>
-
-          <details className="collapse">
-            <summary>
-              Session
-              <ChevronDownIcon size={14} />
-            </summary>
-            <dl className="detail-rows">
-              <div className="detail-row">
-                <dt>First seen</dt>
-                <dd>{visitor ? new Date(visitor.firstSeen).toLocaleString() : '—'}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Last seen</dt>
-                <dd>{visitor ? timeAgo(visitor.lastSeen) : '—'}</dd>
-              </div>
-              <div className="detail-row">
-                <dt>Socket</dt>
-                <dd>{online ? 'online' : 'offline'}</dd>
-              </div>
-            </dl>
-          </details>
-        </div>
-
-        <div className="contact-actions">
-          {conversation && conversation.status !== 'closed' && !conversation.assignedTo && (
-            <button className="btn" onClick={() => void assignToMe()}>
-              Assign to me
-            </button>
+            </>
           )}
-          {conversation && conversation.status !== 'closed' && (
-            <button className="btn danger" onClick={() => void setStatus('closed')}>
-              Close conversation
-            </button>
+
+          {others.length > 0 && (
+            <>
+              <h4>Other conversations</h4>
+              <div className="cv-list">
+                {others.map((c) => (
+                  <Link key={c.id} href={`/conversations/${c.id}`}>
+                    <span>{c.subject ?? 'Conversation'}</span>
+                    <small>{timeAgo(c.lastMessageAt)}</small>
+                  </Link>
+                ))}
+              </div>
+            </>
           )}
-          {conversation?.status === 'closed' && (
-            <button className="btn" onClick={() => void setStatus('open')}>
-              Reopen conversation
-            </button>
-          )}
-        </div>
-      </aside>
+        </aside>
+      )}
     </div>
   );
 }

@@ -8,6 +8,8 @@ import {
 import type { Request } from 'express';
 import { verifyAccessToken, type AccessTokenClaims } from './jwt.js';
 import { roleCan, type Capability, type Role, unauthenticated, forbidden } from '@livechat/shared';
+import { currentTx, memberships, refreshTokens, users, withoutTenant, setUserContext } from '@livechat/db';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 
 /**
  * Request auth context attached after the bearer token is verified.
@@ -20,6 +22,10 @@ export const CAPABILITY_KEY = 'required:capability';
 export const IS_PUBLIC_KEY = 'is:public';
 export const RequireCapability = (capability: Capability) =>
   SetMetadata(CAPABILITY_KEY, capability);
+
+function isRole(value: string): value is Role {
+  return value === 'owner' || value === 'admin' || value === 'agent';
+}
 
 /** Mark a route as public (no auth required). */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
@@ -40,7 +46,7 @@ function extractClaims(req: Request): AccessTokenClaims | null {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = Reflect.getMetadata(IS_PUBLIC_KEY, context.getHandler());
     const req = context.switchToHttp().getRequest<Request>();
     if (isPublic) {
@@ -49,14 +55,88 @@ export class AuthGuard implements CanActivate {
       // (e.g. POST /v1/invitations/accept: signed-in invitees pass their
       // userId, anonymous users can still accept by creating an account).
       const claims = extractClaims(req);
-      if (claims) (req as any).auth = claims satisfies AuthContext;
+      const enrollmentVerify = req.path === '/v1/auth/2fa/verify';
+      const authState = claims ? await getAuthState(claims.sub, claims.workspaceId, claims.sid) : null;
+      if (
+        claims &&
+        authState?.emailVerified &&
+        authState.sessionValid &&
+        authState.membershipRole &&
+        (authState.totpEnabled || authState.twoFactorSkipped || enrollmentVerify)
+      ) {
+        (req as any).auth = { ...claims, role: authState.membershipRole } satisfies AuthContext;
+      }
       return true;
     }
     const claims = extractClaims(req);
     if (!claims) throw unauthenticated();
-    (req as any).auth = claims satisfies AuthContext;
+    const authState = await getAuthState(claims.sub, claims.workspaceId, claims.sid);
+    if (!authState?.emailVerified) {
+      throw forbidden('Verify your email before accessing your workspace.');
+    }
+    if (!authState.sessionValid || !authState.membershipRole) {
+      throw forbidden('This account no longer has access to this workspace.');
+    }
+    const twoFactorRoute = req.path === '/v1/auth/2fa/setup' || req.path === '/v1/auth/2fa/skip';
+    if (!authState.totpEnabled && !twoFactorRoute && !authState.twoFactorSkipped) {
+      throw forbidden('Set up two-factor authentication before accessing your workspace.');
+    }
+    (req as any).auth = { ...claims, role: authState.membershipRole } satisfies AuthContext;
     return true;
   }
+}
+
+async function getAuthState(
+  userId: string,
+  workspaceId: string,
+  sessionId?: string,
+): Promise<{
+  emailVerified: boolean;
+  totpEnabled: boolean;
+  twoFactorSkipped: boolean;
+  sessionValid: boolean;
+  membershipRole: Role | null;
+} | null> {
+  return withoutTenant(process.env.DATABASE_URL!, async () => {
+    const tx = currentTx();
+    const [user] = await tx
+      .select({ emailVerifiedAt: users.emailVerifiedAt, totpEnabled: users.totpEnabled })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user) return null;
+    await setUserContext(userId);
+    const [membership] = await tx
+      .select({ role: memberships.role })
+      .from(memberships)
+      .where(and(
+        eq(memberships.userId, userId),
+        eq(memberships.workspaceId, workspaceId),
+      ))
+      .limit(1);
+    const [session] = sessionId
+      ? await tx
+          .select({
+            twoFactorSkipped: refreshTokens.twoFactorSkipped,
+            workspaceId: refreshTokens.workspaceId,
+          })
+          .from(refreshTokens)
+          .where(and(
+            eq(refreshTokens.userId, userId),
+            eq(refreshTokens.familyId, sessionId),
+            eq(refreshTokens.workspaceId, workspaceId),
+            isNull(refreshTokens.revokedAt),
+            gt(refreshTokens.expiresAt, new Date()),
+          ))
+          .limit(1)
+      : [];
+    return {
+      emailVerified: Boolean(user.emailVerifiedAt),
+      totpEnabled: user.totpEnabled,
+      twoFactorSkipped: Boolean(session?.twoFactorSkipped),
+      sessionValid: !sessionId || Boolean(session),
+      membershipRole: membership && isRole(membership.role) ? membership.role : null,
+    };
+  });
 }
 
 @Injectable()

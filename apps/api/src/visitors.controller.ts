@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { RequireCapability, CurrentAuth, type AuthContext } from './guards.js';
 import { visitorService } from './visitors.service.js';
 
@@ -19,5 +19,11 @@ export class VisitorsController {
   @RequireCapability('conversations:read')
   get(@CurrentAuth() auth: AuthContext, @Param('id') id: string) {
     return visitorService.get(auth.workspaceId, auth.role, id);
+  }
+
+  @Patch(':id')
+  @RequireCapability('conversations:read')
+  update(@CurrentAuth() auth: AuthContext, @Param('id') id: string, @Body() body: unknown) {
+    return visitorService.update(auth.workspaceId, auth.role, id, body);
   }
 }

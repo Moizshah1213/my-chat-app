@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type LoginSession } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { QRCodeSVG } from 'qrcode.react';
 
 /**
  * Security settings (blueprint §7.1/§12): TOTP 2FA enrollment with recovery
  * codes, and session management ("log out everywhere").
  */
 export default function SecurityPage() {
-  const { user } = useAuth();
+  const { user, markTwoFactorEnabled, markTwoFactorDisabled } = useAuth();
   const [enabled, setEnabled] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -80,6 +81,7 @@ export default function SecurityPage() {
     setBusy(true);
     try {
       await api.disable2fa(pw, dcode.trim());
+      markTwoFactorDisabled();
       setEnabled(false);
       setPw('');
       setDcode('');
@@ -111,26 +113,35 @@ export default function SecurityPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page security-page">
       {error && <div className="alert error">{error}</div>}
 
-        <div className="card">
-          <h2>Two-factor authentication</h2>
+        <div className="card security-card">
+          <div className="security-card-heading">
+            <div>
+              <h2>Two-factor authentication</h2>
+              <p className="muted">An authenticator app is required to access the dashboard.</p>
+            </div>
+            <span className="security-status">{enabled ? 'Enabled' : 'Not enabled'}</span>
+          </div>
           {recovery ? (
-            <div className="alert success">
-              <strong>2FA enabled. Recovery codes — copy them now, shown once:</strong>
+            <div className="security-recovery">
+              <strong>2FA is enabled. Save these recovery codes now; they will only be shown once.</strong>
               <div
                 className="mono"
-                style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}
+                style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}
               >
                 {recovery.map((c) => (
-                  <span key={c}>{c}</span>
+                  <span className="security-recovery-code" key={c}>{c}</span>
                 ))}
               </div>
               <button
                 className="btn s"
                 style={{ marginTop: 8 }}
-                onClick={() => setRecovery(null)}
+                onClick={() => {
+                  markTwoFactorEnabled();
+                  setRecovery(null);
+                }}
               >
                 I saved them
               </button>
@@ -138,8 +149,7 @@ export default function SecurityPage() {
           ) : enabled ? (
             <>
               <p>
-                <span className="badge open">enabled</span> — authenticator codes are required at
-                sign-in.
+                Authenticator codes are required at sign-in. Disabling this will return your account to the required setup step.
               </p>
               <form onSubmit={onDisable}>
                 <div className="form-row">
@@ -173,14 +183,19 @@ export default function SecurityPage() {
           ) : pending ? (
             <>
               <p className="muted">
-                Add this secret to your authenticator app, then confirm with the 6-digit code it
-                shows:
+                Scan this QR code with Google Authenticator, Microsoft Authenticator, or another
+                TOTP authenticator. Then enter the current 6-digit code to confirm setup.
               </p>
-              <div className="code" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                {pending.otpauthUrl}
+              <div className="totp-qr">
+                <QRCodeSVG value={pending.otpauthUrl} size={192} level="M" includeMargin />
               </div>
-              <div className="mono muted" style={{ marginTop: 6, wordBreak: 'break-all' }}>
-                Secret: {pending.secret}
+              <details className="totp-manual">
+                <summary>Can’t scan the QR code?</summary>
+                <p className="muted">Enter this setup key manually in your authenticator app:</p>
+                <code>{pending.secret}</code>
+              </details>
+              <div className="totp-notice">
+                Keep your phone’s clock set to automatic time so the authentication codes stay in sync.
               </div>
               <form onSubmit={onVerify} style={{ marginTop: 12, display: 'flex', gap: 10 }}>
                 <div className="field" style={{ marginBottom: 0, width: 180 }}>
@@ -208,25 +223,28 @@ export default function SecurityPage() {
                 Require a 6-digit authenticator code at sign-in, with one-time recovery codes as a
                 backup.
               </p>
-              <button className="btn" onClick={() => void onStartSetup()} disabled={busy}>
+              <button className="btn" style={{ marginTop: 10 }} onClick={() => void onStartSetup()} disabled={busy}>
                 {busy ? 'Preparing…' : 'Set up 2FA'}
               </button>
             </>
           )}
         </div>
 
-        <div className="card">
+        <div className="card security-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>Sessions</h2>
+            <div>
+              <h2 style={{ margin: 0 }}>Active sessions</h2>
+              <p className="muted">Review devices signed in to your account and revoke access you no longer recognize.</p>
+            </div>
             <button className="btn s" onClick={() => void onLogoutAll()}>
               Log out other sessions
             </button>
           </div>
-          <p className="muted">Every signed-in device for your account.</p>
           <table className="list">
             <thead>
               <tr>
                 <th>Device</th>
+                <th>Location</th>
                 <th>IP</th>
                 <th>Signed in</th>
                 <th />
@@ -238,11 +256,12 @@ export default function SecurityPage() {
                   <td>
                     {(s.userAgent ?? 'Unknown device').slice(0, 70)}
                     {s.current && (
-                      <span className="badge open" style={{ marginLeft: 8 }}>
+                      <span className="security-current" style={{ marginLeft: 8 }}>
                         this device
                       </span>
                     )}
                   </td>
+                  <td className="muted">{s.location ?? 'Not available'}</td>
                   <td className="mono muted">{s.ip ?? '—'}</td>
                   <td className="muted">{new Date(s.createdAt).toLocaleString()}</td>
                   <td style={{ textAlign: 'right' }}>
@@ -256,7 +275,7 @@ export default function SecurityPage() {
               ))}
               {sessions.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="muted">
+                  <td colSpan={5} className="muted">
                     No active sessions found.
                   </td>
                 </tr>

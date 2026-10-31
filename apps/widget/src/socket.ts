@@ -3,7 +3,7 @@ import type { ChatMessage } from './types.js';
 
 export interface SocketHandlers {
   onMessage(msg: ChatMessage): void;
-  onTyping(typing: boolean): void;
+  onTyping(typing: boolean, by: 'agent' | 'ai'): void;
   onStatus(status: 'connecting' | 'online' | 'offline'): void;
 }
 
@@ -45,8 +45,13 @@ export function connectChat(
   });
   socket.on('typing', (payload: unknown) => {
     const p = payload as { conversationId?: string; typing?: boolean; by?: string } | null;
-    if (p && p.conversationId === conversationId && p.by === 'agent') {
-      handlers.onTyping(Boolean(p.typing));
+    if (
+      p &&
+      p.conversationId === conversationId &&
+      (p.by === 'agent' || p.by === 'ai') &&
+      typeof p.typing === 'boolean'
+    ) {
+      handlers.onTyping(p.typing, p.by);
     }
   });
 

@@ -9,5 +9,9 @@ export const TENANT_TABLES = [
   'conversations',
   'messages',
   'audit_logs',
+  'email_settings',
+  'ai_settings',
+  'ai_usage',
+
 ] as const;
 export type TenantTable = (typeof TENANT_TABLES)[number];

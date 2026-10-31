@@ -21,6 +21,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_ISSUER: z.string().default('livechat'),
   JWT_AUDIENCE: z.string().default('livechat-app'),
+  GOOGLE_OAUTH_CLIENT_IDS: z.string().optional(),
 
   API_PORT: z.coerce.number().int().positive().default(4000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { BRAND } from '@/config/brand';
+import AuthLayout from '@/components/auth-layout';
 
 export default function SignupPage() {
   const { signUp } = useAuth();
@@ -26,21 +26,21 @@ export default function SignupPage() {
     setError('');
     setBusy(true);
     try {
-      await signUp(form);
-      router.replace('/overview');
+      const email = await signUp(form);
+      router.replace(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
       setBusy(false);
     }
+
   }
 
   return (
-    <div className="auth-page">
+    <AuthLayout>
       <form className="auth-card" onSubmit={onSubmit}>
-        <div className="lg big">{BRAND.product.charAt(0)}</div>
         <h1>Create your workspace</h1>
-        <p className="sub">One line of code adds live chat to your site.</p>
+        <p className="sub">One line of code adds live chat to your site. Verify your email before signing in.</p>
         {error && <div className="alert error">{error}</div>}
         <div className="field">
           <label htmlFor="name">Your name</label>
@@ -73,6 +73,6 @@ export default function SignupPage() {
           Already have an account? <Link href="/login">Sign in</Link>
         </p>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

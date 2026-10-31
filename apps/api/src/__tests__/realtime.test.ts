@@ -8,7 +8,9 @@ import { io as ioClient, type Socket } from 'socket.io-client';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { authenticator } from 'otplib';
 import { AppModule } from '../app.module.js';
+import { authService } from '../auth-service.js';
 import { resetRateLimits } from '../rate-limit.js';
 import { closeDb } from '@livechat/db';
 
@@ -23,6 +25,7 @@ import { closeDb } from '@livechat/db';
  */
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+process.env.EMAIL_PROVIDER = 'console';
 
 const BOOT_URL = process.env.BOOTSTRAP_DATABASE_URL!.replace(/\/[^/]+$/, '/livechat_test');
 const WS_PATH = '/ws';
@@ -89,18 +92,43 @@ const get = (path: string, bearer?: string) => request(path, { bearer });
 async function signup(label: string): Promise<Account> {
   const email = `${label}-${uniq()}@example.com`;
   createdEmails.push(email);
-  const res = await post('/v1/auth/signup', {
-    email,
-    password: 'correct-horse-battery',
-    name: label,
-    workspaceName: `${label} WS`,
-  });
+  const loggedTokens: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    const line = String(args[0] ?? '');
+    if (line.startsWith('[email:verify]')) loggedTokens.push(line.split('-> ')[1]?.trim() ?? '');
+    originalLog.apply(console, args as []);
+  };
+  let res: { status: number; json: any };
+  try {
+    res = await post('/v1/auth/signup', {
+      email,
+      password: 'correct-horse-battery',
+      name: label,
+      workspaceName: `${label} WS`,
+    });
+  } finally {
+    console.log = originalLog;
+  }
   assert.equal(res.status, 200, `signup should succeed: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.requiresEmailVerification, true);
+  const verified = await post('/v1/auth/verify-email', { token: loggedTokens[0] });
+  assert.equal(verified.status, 200, 'verification link should verify the account');
+  const login = await post('/v1/auth/login', { email, password: 'correct-horse-battery' });
+  assert.equal(login.status, 200, 'verified account should sign in');
+  const setup = await post('/v1/auth/2fa/setup', {}, login.json.accessToken);
+  assert.equal(setup.status, 200, 'test account should be able to start 2FA setup');
+  const enabled = await post(
+    '/v1/auth/2fa/verify',
+    { code: authenticator.generate(setup.json.secret) },
+    login.json.accessToken,
+  );
+  assert.equal(enabled.status, 200, 'test account should enable required 2FA');
   return {
     email,
-    accessToken: res.json.accessToken,
-    workspaceId: res.json.workspaceId,
-    userId: res.json.user.id,
+    accessToken: login.json.accessToken,
+    workspaceId: login.json.workspaceId,
+    userId: login.json.user.id,
   };
 }
 
@@ -238,6 +266,17 @@ describe('realtime: socket handshake + conversation room join', () => {
 
     const garbage = await expectConnectError('not.a.jwt');
     assert.match(garbage, /unauthorized/i, `garbage token rejected: ${garbage}`);
+
+    const email = `unverified-socket-${uniq()}@example.com`;
+    createdEmails.push(email);
+    const unverified = await authService.signup({
+      email,
+      password: 'correct-horse-battery',
+      name: 'Unverified',
+      workspaceName: 'Unverified WS',
+    });
+    const unverifiedResult = await expectConnectError(unverified.accessToken);
+    assert.match(unverifiedResult, /email_not_verified/i);
   });
 
   it('agent + visitor join the conversation room and fan out messages', async () => {

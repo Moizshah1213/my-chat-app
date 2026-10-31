@@ -7,6 +7,7 @@ export interface AccessTokenClaims {
   workspaceId: string;
   role: Role;
   jti: string; // token id (for revocation bookkeeping)
+  sid?: string; // refresh-token family id
 }
 
 export function signAccessToken(claims: AccessTokenClaims): string {
@@ -31,6 +32,7 @@ export function verifyAccessToken(token: string): AccessTokenClaims {
     workspaceId: decoded.workspaceId as string,
     role: decoded.role as Role,
     jti: decoded.jti as string,
+    ...(typeof decoded.sid === 'string' ? { sid: decoded.sid } : {}),
   };
 }
 

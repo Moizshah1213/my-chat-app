@@ -1,184 +1,253 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const WORKS_WITH = ['Next.js', 'React', 'WordPress', 'Custom HTML'];
+
+const FEATURES = [
+  { title: 'Realtime inbox', body: 'Messages arrive instantly with typing indicators, assignment and status. No refresh, ever.' },
+  { title: 'AI auto-reply', body: 'When no agent is online, AI answers visitors right away and hands the chat over when your team is back.' },
+  { title: 'Customizable widget', body: 'Brand color, greeting, position and pre-chat fields, set per workspace without a rebuild.' },
+  { title: 'Email and query form', body: 'Offline visitors leave their name, email and question. It lands in the same inbox.' },
+  { title: 'Roles, 2FA and audit log', body: 'Owner, admin and agent roles, TOTP two-factor, and a trail of every privileged action.' },
+  { title: 'Scoped API keys', body: 'Widget keys you can rotate or revoke instantly from the dashboard.' },
+];
+
+const STEPS = [
+  { title: 'Create a workspace', body: 'Sign up, name your workspace and invite your team.' },
+  { title: 'Add one script tag', body: 'Paste the snippet into your site. It works on any stack.' },
+  { title: 'Reply from the dashboard', body: 'Conversations show up in your inbox in real time.' },
+];
+
+const TIERS = [
+  { name: 'Free', price: '$0', features: ['1 agent seat', 'Unlimited conversations', 'Community support'], cta: 'Start free', featured: false },
+  { name: 'Pro', price: '$29', features: ['Unlimited agents', 'Roles, invites, audit log', 'Priority email support'], cta: 'Start free trial', featured: true },
+  { name: 'Business', price: '$99', features: ['SSO-ready workspaces', 'Custom data retention', 'Dedicated support'], cta: 'Contact sales', featured: false },
+];
+
+const FAQ = [
+  { q: 'How do I add the widget to my site?', a: 'Copy the script tag from your dashboard and paste it before the closing body tag. It works with Next.js, React, WordPress and plain HTML.' },
+  { q: 'What happens when no agent is online?', a: 'AI replies to the visitor immediately. Visitors can also switch to the query form and leave their email, and your team sees it in the inbox.' },
+  { q: 'Can I match the widget to my brand?', a: 'Yes. Set the color, greeting, position and pre-chat fields from the Widget page. Changes go live without a rebuild.' },
+  { q: 'Is the free plan really free?', a: 'Yes. One agent seat and unlimited conversations, with no card required.' },
+];
 ---
 
 <Layout
-  title="LiveChat — Live chat that gets out of the way"
-  description="One script tag. A realtime inbox. Separate, secure data for every customer. Add live chat to your site in minutes."
+  bare
+  title="Qonvilo: live chat with instant AI answers"
+  description="Add live chat to your website in minutes. Realtime inbox, AI auto-reply when your team is offline, and a widget that matches your brand."
 >
   <section class="hero">
-    <a class="pill" href="/pricing">New: per-workspace isolation and audit logs <span aria-hidden="true">&rarr;</span></a>
-    <h1>Live chat that gets out of the way.</h1>
-    <p class="sub">
-      One script tag. A realtime inbox. Separate, secure data for every customer.
-    </p>
-    <div class="ctas">
-      <a class="btn-primary" href="/signup">Start for free</a>
-      <a class="btn-outline" href="/demo">Live demo</a>
-    </div>
-    <pre class="snippet"><code>&lt;script src="https://cdn.example.com/widget.js" data-public-key="pk_..." async&gt;&lt;/script&gt;<span class="cursor" aria-hidden="true">&#9608;</span></code></pre>
-  </section>
-
-  <section class="preview" aria-label="Product preview">
-    <div class="preview-app">
-      <div class="preview-side">
-        <span class="preview-side-item active"></span>
-        <span class="preview-side-item"></span>
-        <span class="preview-side-item"></span>
+    <div class="grid-bg" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <span class="pill"><i></i>Live chat with built-in AI</span>
+      <h1>Launch live chat with instant answers</h1>
+      <p class="sub">Day or night, your visitors get an answer. Your team gets a realtime inbox and AI covers the hours you are away.</p>
+      <div class="cta">
+        <a class="b b-light" href="/signup">Start free</a>
+        <a class="b b-line" href="/demo">See the demo</a>
       </div>
-      <div class="preview-thread">
-        <div class="preview-bubble in d1">Hi — do you ship to Canada?</div>
-        <div class="preview-bubble out d2">Yes! Orders before 3pm ship same day.</div>
-        <div class="preview-bubble in d3">Perfect, ordering now.</div>
+      <div class="works" aria-label="Works with">
+        <span class="works-label">Works with</span>
+        <div class="marquee">
+          <div class="track">
+            {[0, 1, 2, 3].flatMap(() => WORKS_WITH).map((n) => <span>{n}</span>)}
+          </div>
+        </div>
       </div>
     </div>
+    <div class="arc" aria-hidden="true"></div>
   </section>
 
-  <section class="features">
-    <article class="card">
-      <h3>Realtime inbox</h3>
-      <p>Messages land instantly over WebSockets. Reply from a dark, fast, keyboard-friendly inbox.</p>
-    </article>
-    <article class="card">
-      <h3>Workspace isolation</h3>      <p>Every customer gets their own workspace with row-level security. No shared tables, ever.</p>
-    </article>
-    <article class="card">
-      <h3>Secure by default</h3>
-      <p>2FA, roles, invites, API keys, and a full audit log — included on every plan.</p>
-    </article>
+  <section class="wrap shot-wrap">
+    <figure class="shot">
+      <img src="/dashboard.webp" width="1895" height="931" alt="Qonvilo dashboard overview showing open conversations, today's resolution rate, weekly chart and team workload" loading="eager" />
+    </figure>
   </section>
 
-  <section class="final-cta">
-    <h2>Add chat to your site today.</h2>
-    <a class="btn-primary" href="/signup">Create free account</a>
+  <section class="wrap sec" id="features">
+    <h2>Everything you need to talk to customers</h2>
+    <p class="lead">Built for teams that want chat on their site today, not after a six-week rollout.</p>
+    <div class="cards">
+      {FEATURES.map((f) => (
+        <article class="card">
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap sec split">
+    <div class="split-text">
+      <h2>A widget your visitors will actually use</h2>
+      <p class="lead left">Visitors chat live with your team or send a query when nobody is around. Either way, nothing gets lost.</p>
+      <ul class="ticks">
+        <li>Live chat and query form in one widget</li>
+        <li>AI replies while your team is offline</li>
+        <li>Your color, greeting and position</li>
+      </ul>
+    </div>
+    <div class="chat" role="img" aria-label="Chat widget preview">
+      <div class="chat-head">
+        <span class="av">L</span>
+        <div><strong>Qonvilo Support</strong><small>Replies instantly</small></div>
+      </div>
+      <div class="tabs"><span class="on">Live chat</span><span>Send a query</span></div>
+      <div class="msgs">
+        <p class="m in">Hi there. How can we help?</p>
+        <p class="m out">Can I invite my whole support team?</p>
+        <p class="m in">Yes. Pro includes unlimited agents with roles and invite links.</p>
+      </div>
+      <div class="input">Write a message</div>
+    </div>
+  </section>
+
+  <section class="wrap sec" id="how">
+    <h2>Live in three steps</h2>
+    <div class="steps">
+      {STEPS.map((s, i) => (
+        <div class="step">
+          <span class="n">{i + 1}</span>
+          <h3>{s.title}</h3>
+          <p>{s.body}</p>
+        </div>
+      ))}
+    </div>
+    <pre class="code"><code>&lt;script src="https://chat.example.com/widget.js" data-key="pk_live_xxxx" async&gt;&lt;/script&gt;</code></pre>
+  </section>
+
+  <section class="wrap sec" id="pricing">
+    <h2>Simple pricing</h2>
+    <p class="lead">Start free. Upgrade when your team grows. No per-message math.</p>
+    <div class="tiers">
+      {TIERS.map((t) => (
+        <article class:list={['tier', { featured: t.featured }]}>
+          <h3>{t.name}</h3>
+          <p class="price">{t.price}<small>/mo</small></p>
+          <ul>{t.features.map((f) => <li>{f}</li>)}</ul>
+          <a class:list={['b', t.featured ? 'b-light' : 'b-line']} href="/signup">{t.cta}</a>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap sec narrow" id="faq">
+    <h2>Questions, answered</h2>
+    <div class="faq">
+      {FAQ.map((f) => (
+        <details>
+          <summary>{f.q}</summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap sec">
+    <div class="final">
+      <h2>Start answering customers today</h2>
+      <p class="lead">Free plan, no card required.</p>
+      <a class="b b-light" href="/signup">Start free</a>
+    </div>
   </section>
 </Layout>
 
+<style is:global>
+  body { background: #000; }
+</style>
+
 <style>
-  .hero {
-    max-width: var(--max-hero);
-    margin: 96px auto 0;
-    text-align: center;
-    animation: fade-up 0.9s var(--ease) both;
-    position: relative;
-  }
-  .hero::before {
-    content: '';
-    position: absolute;
-    top: -120px;
-    left: 50%;
-    width: 600px;
-    height: 420px;
-    transform: translateX(-50%);
-    background: radial-gradient(closest-side, rgba(110, 106, 240, 0.35), transparent);
-    filter: blur(20px);
-    animation: glow-drift 9s ease-in-out infinite alternate;
-    pointer-events: none;
-    z-index: -1;
-  }
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--accent-text);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    padding: 6px 14px;
-    text-decoration: none;
-    transition: border-color 0.2s var(--ease);
-  }
-  .pill:hover { border-color: var(--border-hover); }
-  h1 {
-    font-size: 68px;
-    line-height: 1.04;
-    letter-spacing: -0.035em;
-    font-weight: 600;
-    margin: 28px 0 0;
-  }
-  .sub {
-    font-size: 19px;
-    color: var(--muted);
-    max-width: 560px;
-    margin: 20px auto 0;
-  }
-  .ctas { display: flex; gap: 12px; justify-content: center; margin-top: 32px; }
-  .snippet {
-    margin: 48px auto 0;
-    max-width: 640px;
-    text-align: left;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card);
-    padding: 16px 20px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--muted);
-    overflow-x: auto;
-  }
-  .cursor { color: var(--accent); animation: cursor-blink 1s steps(1) infinite; }
+  .wrap { max-width: var(--max-grid); margin: 0 auto; padding: 0 24px; }
+  .sec { padding-top: 112px; text-align: center; }
+  .sec.narrow { max-width: 720px; }
 
-  .preview { max-width: 880px; margin: 72px auto 0; }
-  .preview-app {
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    overflow: hidden;
-    min-height: 300px;
-  }
-  .preview-side { border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 10px; }
-  .preview-side-item { height: 10px; border-radius: 6px; background: var(--surface-2); }
-  .preview-side-item.active { background: var(--accent-soft); }
-  .preview-thread { padding: 24px; display: flex; flex-direction: column; gap: 12px; }
-  .preview-bubble {
-    max-width: 60%;
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 14px;
-    animation: fade-up 0.9s var(--ease) both;
-  }
-  .preview-bubble.in { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-  .preview-bubble.out { align-self: flex-end; background: var(--text); color: var(--bg); border-bottom-right-radius: 4px; }
-  .d1 { animation-delay: 0.1s; }
-  .d2 { animation-delay: 0.25s; }
-  .d3 { animation-delay: 0.4s; }
+  .b { display: inline-flex; align-items: center; justify-content: center; padding: 11px 22px; border-radius: 999px; font-size: 14px; font-weight: 500; text-decoration: none; border: 1px solid transparent; transition: opacity .2s var(--ease), background .2s var(--ease); }
+  .b-light { background: #fff; color: #000; }
+  .b-light:hover { opacity: .85; }
+  .b-line { border-color: rgba(255,255,255,.7); color: #fff; }
+  .b-line:hover { background: rgba(255,255,255,.08); }
 
-  .features {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    margin-top: 96px;
-  }
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card);
-    padding: 24px;
-    transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
-    animation: fade-up 0.9s var(--ease) both;
-  }
-  .card:nth-child(1) { animation-delay: 0.05s; }
-  .card:nth-child(2) { animation-delay: 0.13s; }
-  .card:nth-child(3) { animation-delay: 0.21s; }
-  .card:hover { transform: translateY(-3px); border-color: var(--border-hover); }
-  .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
-  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .hero { position: relative; margin-top: -66px; min-height: 100vh; display: flex; justify-content: center; overflow: hidden; padding: 190px 24px 0; }
+  .grid-bg { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px); background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse 55% 50% at 50% 38%, #000 15%, transparent 75%); mask-image: radial-gradient(ellipse 55% 50% at 50% 38%, #000 15%, transparent 75%); }
+  .hero-inner { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 780px; animation: fade-up .9s var(--ease) both; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; padding: 6px 14px; border: 1px solid rgba(255,255,255,.55); border-radius: 999px; }
+  .pill i { width: 5px; height: 5px; border-radius: 50%; background: #fff; }
+  h1 { margin: 26px 0 0; font-size: clamp(40px, 7vw, 70px); line-height: 1.05; font-weight: 700; letter-spacing: -.04em; background: linear-gradient(180deg, #fff 25%, #858585); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { margin: 24px 0 0; color: var(--muted); font-size: 17px; max-width: 520px; }
+  .cta { margin-top: 32px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
-  .final-cta {
-    margin-top: 96px;
-    text-align: center;
-    padding: 64px 24px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: var(--surface);
-  }
-  .final-cta h2 { font-size: 40px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 24px; }
+  .works { margin-top: 72px; display: flex; align-items: center; gap: 28px; width: min(600px, 92vw); }
+  .works-label { color: var(--faint); font-size: 13px; white-space: nowrap; }
+  .marquee { overflow: hidden; flex: 1; -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); }
+  .track { display: flex; gap: 36px; width: max-content; animation: slide 28s linear infinite; }
+  .track span { color: #c4c4c4; font-weight: 600; font-size: 15px; white-space: nowrap; }
+  @keyframes slide { to { transform: translateX(-50%); } }
+
+  .arc { position: absolute; left: 50%; bottom: -380px; width: 150vw; height: 540px; transform: translateX(-50%); border-radius: 50%; background: #000; border-top: 2px solid rgba(255,255,255,.95); box-shadow: 0 -4px 40px rgba(255,255,255,.5), 0 -30px 120px rgba(255,255,255,.16); z-index: 1; }
+
+  .shot-wrap { margin-top: -70px; position: relative; z-index: 3; }
+  .shot { margin: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 18px; padding: 6px; background: #0a0a0b; box-shadow: 0 -1px 0 rgba(255,255,255,.35) inset, 0 40px 120px rgba(255,255,255,.07); }
+  .shot img { display: block; width: 100%; height: auto; border-radius: 13px; }
+
+  h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); line-height: 1.12; font-weight: 700; letter-spacing: -.03em; background: linear-gradient(180deg, #fff 30%, #8a8a8a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { margin: 16px auto 0; color: var(--muted); font-size: 17px; max-width: 520px; }
+  .lead.left { margin-left: 0; }
+
+  .cards { margin-top: 56px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; text-align: left; }
+  .card { padding: 26px 24px 28px; border: 1px solid var(--border); border-radius: var(--radius-card); background: linear-gradient(180deg, #0e0e10, #050505); transition: border-color .2s var(--ease); }
+  .card:hover { border-color: var(--border-hover); }
+  h3 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .card p { margin: 10px 0 0; color: var(--muted); font-size: 14.5px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; text-align: left; }
+  .ticks { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 12px; font-size: 15px; }
+  .ticks li::before { content: "\2713"; margin-right: 12px; color: #fff; }
+  .chat { max-width: 380px; width: 100%; margin-left: auto; padding: 16px; border: 1px solid var(--border-hover); border-radius: 22px; background: #070708; box-shadow: 0 0 90px rgba(255,255,255,.06); }
+  .chat-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .chat-head strong { display: block; font-size: 14px; } .chat-head small { color: var(--muted); font-size: 12px; }
+  .av { width: 36px; height: 36px; border-radius: 50%; background: #e8e8e8; color: #000; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+  .tabs { display: flex; gap: 6px; margin: 14px 0; font-size: 12.5px; }
+  .tabs span { padding: 6px 13px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .tabs .on { background: #fff; color: #000; border-color: #fff; }
+  .msgs { display: flex; flex-direction: column; gap: 10px; min-height: 200px; }
+  .m { margin: 0; max-width: 84%; padding: 10px 14px; border-radius: 16px; font-size: 13.5px; }
+  .m.in { background: #17181b; border-bottom-left-radius: 4px; }
+  .m.out { background: #fff; color: #000; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .input { margin-top: 14px; padding: 11px 16px; border: 1px solid var(--border); border-radius: 999px; color: var(--faint); font-size: 13px; }
+
+  .steps { margin-top: 56px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; text-align: left; }
+  .step { padding: 4px 4px 0; }
+  .n { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-hover); font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .step p { margin: 8px 0 0; color: var(--muted); font-size: 14.5px; }
+  .code { margin: 40px 0 0; padding: 18px 22px; text-align: left; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card); background: #070708; font-family: var(--font-mono); font-size: 13px; color: #cfcfcf; }
+
+  .tiers { margin-top: 56px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; text-align: left; align-items: stretch; }
+  .tier { display: flex; flex-direction: column; padding: 28px 24px; border: 1px solid var(--border); border-radius: var(--radius-card); background: #050505; }
+  .tier.featured { border-color: #fff; box-shadow: 0 0 80px rgba(255,255,255,.09); }
+  .price { margin: 14px 0 0; font-size: 42px; font-weight: 700; letter-spacing: -.03em; }
+  .price small { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .tier ul { list-style: none; margin: 22px 0 28px; padding: 0; display: grid; gap: 10px; color: var(--muted); font-size: 14.5px; flex: 1; }
+  .tier li::before { content: "\2713"; margin-right: 10px; color: #fff; }
+
+  .faq { margin-top: 44px; text-align: left; border-top: 1px solid var(--border); }
+  details { border-bottom: 1px solid var(--border); padding: 20px 0; }
+  summary { cursor: pointer; font-weight: 500; font-size: 16px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--muted); font-size: 22px; line-height: 1; transition: transform .2s var(--ease); }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { margin: 12px 0 0; color: var(--muted); font-size: 15px; }
+
+  .final { padding: 72px 24px; border: 1px solid var(--border); border-radius: 26px; background: radial-gradient(ellipse 70% 90% at 50% 130%, rgba(255,255,255,.2), transparent 70%), #050505; }
+  .final .b { margin-top: 28px; }
+
   @media (max-width: 860px) {
-    h1 { font-size: 44px; }
-    .features { grid-template-columns: 1fr; }
-    .final-cta h2 { font-size: 28px; }
+    .cards, .steps, .tiers { grid-template-columns: 1fr; }
+    .split { grid-template-columns: 1fr; gap: 40px; }
+    .chat { margin: 0 auto; }
+    .hero { padding-top: 150px; }
+    .arc { bottom: -420px; }
+    .sec { padding-top: 80px; }
+    .works-label { display: none; }
   }
 </style>

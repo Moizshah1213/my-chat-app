@@ -154,6 +154,14 @@ export const sendMessageSchema = strict({
   idempotencyKey: z.string().min(1).max(64).optional(),
 });
 
+export const editMessageSchema = strict({
+  body: z.string().trim().min(1).max(MESSAGE_MAX_LENGTH),
+});
+
+export const conversationNotificationPreferenceSchema = strict({
+  paused: z.boolean(),
+});
+
 /** GET /v1/visitors — most-recently-active first, small fixed window. */
 export const listVisitorsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
@@ -177,7 +185,7 @@ export const wsTypingSchema = strict({
 
 // ---- Phase 3: API keys + widget customization -------------------------------
 
-/** POST /v1/api-keys — mint a new widget public key (pk_live_…). The key is
+/** POST /v1/api-keys — mint a new widget public key (qvse_…). The key is
  *  public by design (it ships in embed code); scopes/secret keys (sk_…) come
  *  with the server-to-server API in a later phase. */
 export const createApiKeySchema = strict({
@@ -187,12 +195,27 @@ export const createApiKeySchema = strict({
 /** PATCH /v1/widget/settings — widget customization (agent-managed). */
 export const updateWidgetSettingsSchema = strict({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  theme: z.enum(['dark', 'light']).optional(),
+  backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  backgroundGradient: z.boolean().optional(),
+  backgroundGradientColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  buttonColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  agentBubbleColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   logoUrl: z.string().url().max(2048).nullable().optional(),
   position: z.enum(['left', 'right']).optional(),
   greeting: z.string().max(500).nullable().optional(),
   offlineMessage: z.string().max(500).nullable().optional(),
-  prechatFields: z.array(z.record(z.any())).max(20).optional(),
+  prechatFields: z.array(strict({
+    name: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/),
+    label: z.string().max(80).optional(),
+    type: z.enum(['text', 'email', 'tel']).optional(),
+    required: z.boolean().optional(),
+  })).max(20).refine((fields) => new Set(fields.map((field) => field.name)).size === fields.length, {
+    message: 'Pre-chat field names must be unique',
+  }).optional(),
+  prechatEnabled: z.boolean().optional(),
   workingHours: z.record(z.any()).optional(),
+  quickReplies: z.array(z.string().trim().min(1).max(120)).max(6).optional(),
   allowedDomains: z.array(z.string().min(1).max(253)).max(50).optional(),
   language: z.string().min(2).max(10).optional(),
   aiEnabled: z.boolean().optional(),
@@ -203,6 +226,47 @@ export const updateWidgetSettingsSchema = strict({
 /** GET /widget/v1/settings query — public widget key lookup. */
 export const widgetSettingsQuerySchema = strict({
   key: z.string().min(8).max(64),
+});
+
+// ---- Phase 4: AI settings ----------------------------------------------------
+
+/**
+ * PATCH /v1/ai/settings — AI assistant configuration (owner/admin).
+ * apiKey is accepted on save (sealed at rest via AES-256-GCM vault); it is
+ * never returned in any response. baseUrl is SSRF-guarded in the service.
+ */
+export const updateAiSettingsSchema = strict({
+  mode: z.enum(['off', 'suggest', 'auto']).optional(),
+  provider: z.enum(['openai_compatible', 'openai', 'anthropic']).optional(),
+  baseUrl: z.string().url().max(2048).optional(),
+  model: z.string().min(1).max(128).optional(),
+  apiKey: z.string().min(1).max(512).optional(),
+  instructions: z
+    .record(z.string().max(2000))
+    .refine((v) => Object.keys(v).length <= 50, { message: 'Too many instruction keys (max 50)' })
+    .optional(),
+  temperature: z.number().min(0).max(1).optional(),
+  maxOutputTokens: z.number().int().min(50).max(2000).optional(),
+  monthlyTokenCap: z.number().int().min(0).optional(),
+}).refine((v) => Object.values(v).some((x) => x !== undefined), {
+  message: 'At least one field to update is required',
+});
+
+// ---- Phase 2 (visitor profile update) ----------------------------------------
+
+/**
+ * PATCH /v1/visitors/:id — update visitor profile (owner/admin).
+ * Used by agents to set displayName/tags/notes, and to merge pre-chat form
+ * data (name, email) submitted by the visitor via the widget.
+ */
+export const updateVisitorSchema = strict({
+  name: z.string().min(1).max(120).nullable().optional(),
+  email: emailSchema.nullable().optional(),
+  displayName: z.string().min(1).max(80).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  tags: z.array(z.string().min(1).max(64)).max(20).optional(),
+}).refine((v) => Object.values(v).some((x) => x !== undefined), {
+  message: 'At least one field to update is required',
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
@@ -216,3 +280,21 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
 export type UpdateWidgetSettingsInput = z.infer<typeof updateWidgetSettingsSchema>;
 export type WidgetSettingsQueryInput = z.infer<typeof widgetSettingsQuerySchema>;
+export type UpdateAiSettingsInput = z.infer<typeof updateAiSettingsSchema>;
+
+/**
+ * POST/GET/PATCH /v1/email-settings — email provider config (owner/admin).
+ * Passwords/API keys sealed at rest; never returned in responses.
+ */
+export const emailSettingsSchema = strict({
+  provider: z.enum(['smtp', 'resend', 'sendgrid']).optional(),
+  host: z.string().min(1).max(253).optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  user: z.string().min(1).max(253).optional(),
+  password: z.string().min(1).max(512).optional(),
+  fromEmail: emailSchema.nullable().optional(),
+  fromName: z.string().min(1).max(120).nullable().optional(),
+});
+
+export type EmailSettingsInput = z.infer<typeof emailSettingsSchema>;
+export type UpdateVisitorInput = z.infer<typeof updateVisitorSchema>;

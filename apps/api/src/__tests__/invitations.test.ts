@@ -14,6 +14,7 @@ import { closeDb } from '@livechat/db';
  */
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+process.env.EMAIL_PROVIDER = 'console';
 
 const BOOT_URL = process.env.BOOTSTRAP_DATABASE_URL!.replace(/\/[^/]+$/, '/livechat_test');
 let boot: ReturnType<typeof postgres>;
@@ -54,11 +55,14 @@ describe('Invitation accept flow', () => {
     const invitee = `invitee-${uniq()}@example.com`;
     createdEmails.push(invitee);
 
-    const { token } = await workspaceService.invite(owner.workspaceId, 'owner', {
+    const { token, inviteUrl, invitationId } = await workspaceService.invite(owner.workspaceId, 'owner', {
       email: invitee,
       role: 'agent',
     });
     assert.ok(token, 'invite returns the raw token (dev stand-in for email)');
+    assert.equal(inviteUrl, `${(process.env.PUBLIC_APP_ORIGIN ?? 'http://localhost:3000').replace(/\/+$/, '')}/invite/${encodeURIComponent(token)}`);
+    const pending = await workspaceService.listInvitations(owner.workspaceId, 'owner');
+    assert.equal(pending.find((invitation) => invitation.id === invitationId)?.status, 'pending');
 
     const preview = await workspaceService.previewInvitation(token);
     assert.equal(preview.email, invitee);
@@ -77,6 +81,11 @@ describe('Invitation accept flow', () => {
     // Owner sees the new member (members:read is owner-only, we are the owner).
     const members = await workspaceService.listMembers(owner.workspaceId, 'owner');
     assert.equal(members.length, 2, 'owner + accepted invitee');
+    const joinedMember = members.find((member) => member.email === invitee);
+    assert.equal(joinedMember?.name, 'Invited Agent');
+    assert.equal(joinedMember?.role, 'agent');
+    const accepted = await workspaceService.listInvitations(owner.workspaceId, 'owner');
+    assert.equal(accepted.find((invitation) => invitation.id === invitationId)?.status, 'accepted');
 
     // Single use: the token cannot be replayed for preview or accept.
     await assert.rejects(
@@ -169,5 +178,23 @@ describe('Invitation accept flow', () => {
       }),
       /owner/,
     );
+  });
+
+  it('cancels a pending invitation and invalidates its link', async () => {
+    const owner = await makeOwner('inv-cancel');
+    const invitee = `cancel-${uniq()}@example.com`;
+    const { token, invitationId } = await workspaceService.invite(owner.workspaceId, 'owner', {
+      email: invitee,
+      role: 'agent',
+    });
+
+    await workspaceService.cancelInvitation(owner.workspaceId, 'owner', invitationId);
+
+    assert.equal(
+      (await workspaceService.listInvitations(owner.workspaceId, 'owner'))
+        .some((invitation) => invitation.id === invitationId),
+      false,
+    );
+    await assert.rejects(() => workspaceService.previewInvitation(token), /Invalid invitation token/);
   });
 });

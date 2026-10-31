@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, type AuditEntry } from '@/lib/api';
+import { auditActionLabel, auditDetails } from '@/lib/audit-format';
 
 const WHEN = new Intl.DateTimeFormat('en', {
   month: 'short',
@@ -32,7 +33,7 @@ export default function ActivityPage() {
 
   return (
     <div className="page">
-      {error && <div className="alert error">{error}</div>}
+      {error && <div className="alert">{error}</div>}
         <div className="card">
           <h2>Recent activity</h2>
           {loading && <div className="muted">Loading…</div>}
@@ -44,18 +45,16 @@ export default function ActivityPage() {
               <thead>
                 <tr>
                   <th>When</th>
-                  <th>Action</th>
-                  <th>Actor</th>
-                  <th>Target</th>
+                  <th>Activity</th>
+                  <th>Details</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((e) => (
                   <tr key={e.id}>
                     <td className="muted">{WHEN.format(new Date(e.createdAt))}</td>
-                    <td className="mono">{e.action}</td>
-                    <td className="mono">{e.actorId ? `${e.actorId.slice(0, 8)}…` : '—'}</td>
-                    <td className="mono">{e.target ? `${e.target.slice(0, 12)}…` : '—'}</td>
+                    <td>{auditActionLabel(e.action)}</td>
+                    <td className="muted">{auditDetails(e)}</td>
                   </tr>
                 ))}
               </tbody>

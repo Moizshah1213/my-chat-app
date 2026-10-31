@@ -6,8 +6,8 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
-import { eq, and } from 'drizzle-orm';
-import { conversations, withTenant, currentTx } from '@livechat/db';
+import { eq, and, gt, isNull } from 'drizzle-orm';
+import { conversations, refreshTokens, users, withTenant, withoutTenant, currentTx } from '@livechat/db';
 import { AppError, conversationIdSchema, wsMessageSendSchema, wsTypingSchema, type Role } from '@livechat/shared';
 import { ZodError } from 'zod';
 import { verifyAccessToken } from './jwt.js';
@@ -15,6 +15,7 @@ import { verifyVisitorToken } from './visitor-jwt.js';
 import { conversationService } from './conversations.service.js';
 import { registerRealtime } from './realtime.js';
 import { consumeRateLimit } from './rate-limit.js';
+import { agentConnected, agentDisconnected } from './ai-reply.js';
 
 /**
  * Socket.IO gateway (blueprint §9 Realtime Flow).
@@ -63,7 +64,11 @@ async function authorizeConversation(
     const [conv] = await tx
       .select({ id: conversations.id, visitorId: conversations.visitorId, status: conversations.status })
       .from(conversations)
-      .where(and(eq(conversations.workspaceId, auth.workspaceId), eq(conversations.id, conversationId)))
+      .where(and(
+        eq(conversations.workspaceId, auth.workspaceId),
+        eq(conversations.id, conversationId),
+        isNull(conversations.deletedAt),
+      ))
       .limit(1);
     if (!conv || (auth.kind === 'visitor' && conv.visitorId !== auth.visitorId)) {
       throw new AppError('not_found', 'Conversation not found', 404);
@@ -87,16 +92,54 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
 
     // Handshake auth middleware: reject before any room join happens.
-    server.use((socket, next) => {
+    server.use(async (socket, next) => {
       const token = (socket.handshake.auth as any)?.token;
       if (typeof token === 'string' && token) {
+        let claims;
         try {
-          const a = verifyAccessToken(token);
-          (socket.data as any).auth = {
-            kind: 'agent', workspaceId: a.workspaceId, userId: a.sub, role: a.role,
-          } satisfies Principal;
-          return next();
+          claims = verifyAccessToken(token);
         } catch { /* try visitor token next */ }
+        if (claims) {
+          try {
+            const securityState = await withoutTenant(process.env.DATABASE_URL!, async () => {
+              const tx = currentTx();
+              const [user] = await tx
+                .select({ emailVerifiedAt: users.emailVerifiedAt, totpEnabled: users.totpEnabled })
+                .from(users)
+                .where(eq(users.id, claims.sub));
+              const [skippedSession] = !user?.totpEnabled && claims.sid
+                ? await tx
+                    .select({ id: refreshTokens.id })
+                    .from(refreshTokens)
+                    .where(and(
+                      eq(refreshTokens.userId, claims.sub),
+                      eq(refreshTokens.familyId, claims.sid),
+                      eq(refreshTokens.twoFactorSkipped, true),
+                      isNull(refreshTokens.revokedAt),
+                      gt(refreshTokens.expiresAt, new Date()),
+                    ))
+                    .limit(1)
+                : [];
+              return user
+                ? {
+                    emailVerified: Boolean(user.emailVerifiedAt),
+                    totpEnabled: user.totpEnabled,
+                    twoFactorSkipped: Boolean(skippedSession),
+                  }
+                : null;
+            });
+            if (!securityState?.emailVerified) return next(new Error('email_not_verified'));
+            if (!securityState.totpEnabled && !securityState.twoFactorSkipped) {
+              return next(new Error('two_factor_setup_required'));
+            }
+            (socket.data as any).auth = {
+              kind: 'agent', workspaceId: claims.workspaceId, userId: claims.sub, role: claims.role,
+            } satisfies Principal;
+            return next();
+          } catch (error) {
+            return next(error instanceof Error ? error : new Error('Authentication check failed'));
+          }
+        }
         try {
           const v = verifyVisitorToken(token);
           (socket.data as any).auth = {
@@ -115,6 +158,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (auth.kind === 'agent') {
       socket.join(`workspace:${auth.workspaceId}`);
       socket.join(`agent:${auth.userId}`);
+      // Track online agents so AI auto-reply knows when to defer to a human.
+      agentConnected(auth.workspaceId);
     } else {
       socket.join(`visitor:${auth.visitorId}`);
       const key = `${auth.workspaceId}:${auth.visitorId}`;
@@ -130,7 +175,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(socket: Socket) {
     const auth = principal(socket);
-    if (auth?.kind !== 'visitor') return;
+    if (!auth) return;
+
+    if (auth.kind === 'agent') {
+      // Decrement online agent count so AI can take over when last agent leaves.
+      agentDisconnected(auth.workspaceId);
+      return;
+    }
+
+    // Visitor disconnect — broadcast presence update
     const key = `${auth.workspaceId}:${auth.visitorId}`;
     const prev = this.onlineVisitors.get(key) ?? 0;
     if (prev <= 1) {

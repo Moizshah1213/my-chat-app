@@ -32,7 +32,7 @@ async function bootstrap() {
   app.set('trust proxy', 1);
 
   // Body size limits (blueprint §8.2).
-  app.useBodyParser('json', { limit: '256kb' });
+  app.useBodyParser('json', { limit: '2mb' });
 
   app.useGlobalFilters(new HttpExceptionFilter());
 

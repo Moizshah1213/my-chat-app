@@ -1,6 +1,6 @@
-import type { LiveChatUser, VisitorInitResult, WidgetSettings } from './types.js';
+import type { LiveChatUser, QueryPayload, VisitorInitResult, WidgetSettings } from './types.js';
 
-/** GET /widget/v1/settings?key=pk_… — public bootstrap config. */
+/** GET /widget/v1/settings?key=qvse_… — public bootstrap config. */
 export async function fetchSettings(apiUrl: string, publicKey: string): Promise<WidgetSettings> {
   const res = await fetch(`${apiUrl}/widget/v1/settings?key=${encodeURIComponent(publicKey)}`, {
     headers: { accept: 'application/json' },
@@ -31,4 +31,27 @@ export async function visitorInit(
   });
   if (!res.ok) throw new Error(`visitor_init failed (${res.status})`);
   return (await res.json()) as VisitorInitResult;
+}
+
+/**
+ * POST /widget/v1/queries — leave an email query for the team (no live chat).
+ * Server contract: 2xx on success; the visitor is emailed back at `email`.
+ */
+export async function submitQuery(
+  apiUrl: string,
+  publicKey: string,
+  anonymousId: string,
+  query: QueryPayload,
+): Promise<void> {
+  const res = await fetch(`${apiUrl}/widget/v1/queries`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      publicKey,
+      anonymousId,
+      ...query,
+      page: typeof location !== 'undefined' ? location.href : undefined,
+    }),
+  });
+  if (!res.ok) throw new Error(`query submit failed (${res.status})`);
 }

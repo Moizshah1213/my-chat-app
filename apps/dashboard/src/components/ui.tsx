@@ -36,10 +36,10 @@ export const badgeVariants = cva(
     variants: {
       variant: {
         default: 'bg-surface-3 text-text-secondary',
-        open: 'bg-success/15 text-success',
-        closed: 'bg-danger/14 text-danger',
-        pending: 'bg-warning/14 text-warning',
-        assigned: 'bg-info/14 text-info',
+        open: 'bg-accent/15 text-accent',
+        closed: 'bg-surface-3 text-text-secondary',
+        pending: 'bg-surface-3 text-text-secondary',
+        assigned: 'bg-surface-3 text-text-secondary',
         unread: 'bg-accent/16 text-accent',
       },
     },

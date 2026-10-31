@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { api, type AuditEntry, type Conversation } from '@/lib/api';
+import { auditActionLabel, auditDetails } from '@/lib/audit-format';
 import { timeAgo } from '../components/inbox-list';
 
 interface Data {
@@ -11,6 +12,7 @@ interface Data {
   visitors: number;
   members: number;
   activeKeys: number;
+  errors: string[];
   /** null = not allowed to read the audit log (agents) or failed to load. */
   audit: AuditEntry[] | null;
 }
@@ -20,16 +22,18 @@ const iv = (i: number) => ({ '--i': i }) as CSSProperties;
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
-  const [count, setCount] = useState(value);
-  const current = useRef(value);
+  const [count, setCount] = useState(0);
+  const current = useRef(0);
 
   useEffect(() => {
     const from = current.current;
-    const start = performance.now();
+    const start = performance.now() + 250;
     let frame = 0;
     const animate = (now: number) => {
-      const progress = Math.min((now - start) / 500, 1);
-      const next = Math.round(from + (value - from) * progress);
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / 1400, 1);
+      const eased = progress <= 0 ? 0 : progress >= 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      const next = Math.round(from + (value - from) * eased);
       current.current = next;
       setCount(next);
       if (progress < 1) frame = requestAnimationFrame(animate);
@@ -38,7 +42,7 @@ function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
     return () => cancelAnimationFrame(frame);
   }, [value]);
 
-  return <>{count}{suffix}</>;
+  return <>{count.toLocaleString()}{suffix}</>;
 }
 
 /** Round a chart maximum up to a clean multiple of 4 so the y-axis has 4 even steps. */
@@ -64,11 +68,17 @@ export default function OverviewPage() {
         api.listAuditLogs(6),
       ]);
       if (off) return;
+      const errors: string[] = [];
+      if (c.status === 'rejected') errors.push('conversations');
+      if (v.status === 'rejected') errors.push('visitors');
+      if (m.status === 'rejected') errors.push('team');
+      if (k.status === 'rejected') errors.push('API keys');
       setData({
         convs: c.status === 'fulfilled' ? c.value.items : [],
         visitors: v.status === 'fulfilled' ? v.value.length : 0,
         members: m.status === 'fulfilled' ? m.value.length : 0,
         activeKeys: k.status === 'fulfilled' ? k.value.filter((x) => !x.revokedAt).length : 0,
+        errors,
         audit: a.status === 'fulfilled' ? a.value : null,
       });
     })();
@@ -107,6 +117,11 @@ export default function OverviewPage() {
 
   return (
     <div className="page">
+      {data?.errors.length ? (
+        <div className="alert" role="status">
+          Could not load {data.errors.join(', ')}. Check your connection and refresh.
+        </div>
+      ) : null}
       <div className="grid g3 eq">
         {/* Open conversations */}
         <div className="card col">
@@ -119,7 +134,7 @@ export default function OverviewPage() {
                 <CountUp value={s.open} />
               </div>
               <div className="rv" style={iv(1)}>
-                <span className={s.unassigned ? 'chip r' : 'chip'}>
+                <span className={s.unassigned ? 'chip' : 'chip'}>
                   {s.unassigned} unassigned
                 </span>{' '}
                 <span className="m">in the queue</span>
@@ -137,26 +152,25 @@ export default function OverviewPage() {
           )}
         </div>
 
-        {/* Orange hero */}
         <div className="hero">
           {loading ? (
-            <div className="skl d" style={{ '--h': '300px' } as CSSProperties} />
+            <div className="skl d" style={{ '--h': '312px' } as CSSProperties} />
           ) : (
             <>
-              <div className="hr rv" style={iv(0)}>
+              <div className="hr">
                 <span className="tag">Today</span>
-                <span className="tag">{s.total} loaded</span>
+                <span className="tag">{s.total} conversations loaded</span>
               </div>
-              <div className="hn rv" style={iv(1)}>
+              <div className="hn">
                 <b><CountUp value={s.today} /></b>
-                <span>active conversations</span>
+                <span>conversations today</span>
               </div>
-              <div className="prog w rv" style={iv(2)}><i style={{ width: `${s.resolvedPct}%` }} /></div>
-              <div className="hl rv" style={iv(2)}>
+              <div className="prog w"><i style={{ width: `${s.resolvedPct}%` }} /></div>
+              <div className="hl">
                 <span>Resolution rate</span>
                 <span>{s.closed} of {s.total} resolved</span>
               </div>
-              <div className="glass push rv" style={iv(3)}>
+              <div className="glass push">
                 <div><span>Visitors</span><b><CountUp value={data.visitors} /></b></div>
                 <div><span>Pending</span><b><CountUp value={s.pending} /></b></div>
                 <div><span>Resolved</span><b><CountUp value={s.resolvedPct} suffix="%" /></b></div>
@@ -211,30 +225,29 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      <div className="grid g3 eq">
-        {/* Black gradient box */}
+      <div className="grid g3 eq" style={{ marginTop: 18 }}>
         <div className="dark">
           {loading ? (
             <div className="skl d" style={{ '--h': '280px' } as CSSProperties} />
           ) : (
             <>
-              <div className="hr rv" style={iv(0)}>
+              <div className="hr">
                 <h3>Team workload</h3>
                 <span className="tag">{data.members} {data.members === 1 ? 'member' : 'members'}</span>
               </div>
-              <div className="hn rv" style={iv(1)}>
+              <div className="hn">
                 <b><CountUp value={s.queue} /></b>
-                <span>in the queue</span>
+                <span>conversations in queue</span>
               </div>
-              <div className="prog w rv" style={iv(2)}><i style={{ width: `${s.assignedPct}%` }} /></div>
-              <div className="hl rv" style={iv(2)}>
+              <div className="prog w"><i style={{ width: `${s.assignedPct}%` }} /></div>
+              <div className="hl">
                 <span>{s.assignedPct}% assigned</span>
-                <span>{s.unassigned} waiting for an owner</span>
+                <span>{s.unassigned} unassigned</span>
               </div>
-              <div className="glass push rv" style={iv(3)}>
-                <div><span>Members</span><b>{data.members}</b></div>
-                <div><span>Active keys</span><b>{data.activeKeys}</b></div>
-                <div><span>Visitors</span><b>{data.visitors}</b></div>
+              <div className="glass push">
+                <div><span>Members</span><b><CountUp value={data.members} /></b></div>
+                <div><span>Active keys</span><b><CountUp value={data.activeKeys} /></b></div>
+                <div><span>Visitors</span><b><CountUp value={data.visitors} /></b></div>
               </div>
             </>
           )}
@@ -253,14 +266,13 @@ export default function OverviewPage() {
             <div className="scroll">
               <table>
                 <thead>
-                  <tr><th>Event</th><th>Actor</th><th>Target</th><th>When</th></tr>
+                  <tr><th>Activity</th><th>Details</th><th>When</th></tr>
                 </thead>
                 <tbody>
                   {data.audit.map((e) => (
                     <tr key={e.id}>
-                      <td className="mono">{e.action}</td>
-                      <td className="mono muted">{e.actorId ? `${e.actorId.slice(0, 8)}…` : '—'}</td>
-                      <td className="mono muted">{e.target ? `${e.target.slice(0, 12)}…` : '—'}</td>
+                      <td>{auditActionLabel(e.action)}</td>
+                      <td className="muted">{auditDetails(e)}</td>
                       <td className="muted">{timeAgo(e.createdAt)}</td>
                     </tr>
                   ))}

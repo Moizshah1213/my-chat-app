@@ -54,6 +54,11 @@ export async function sendEmail(msg: EmailMessage): Promise<void> {
     }
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    console.info(`[email] console transport is disabled for delivery (${msg.subject})`);
+    return;
+  }
+
   // Console dev stand-in. Token emails keep the "<marker> <to> -> <token>"
   // shape the test suite parses.
   if (msg.devMarker && msg.devToken) {
@@ -62,4 +67,3 @@ export async function sendEmail(msg: EmailMessage): Promise<void> {
     console.log(`[email] to=${msg.to} subject="${msg.subject}"\n${msg.text}`);
   }
 }
-

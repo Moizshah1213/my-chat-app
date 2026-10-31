@@ -18,7 +18,7 @@ import { apiKeyService } from './api-keys.service.js';
  * Two surfaces:
  *  1. Agent-facing GET/PATCH /v1/widget/settings (settings:update capability) —
  *     the full settings row, including allowedDomains (the site allowlist).
- *  2. PUBLIC GET /widget/v1/settings?key=pk_… — the bootstrap config the
+ *  2. PUBLIC GET /widget/v1/settings?key=qvse_… — the bootstrap config the
  *     embeddable widget fetches. Resolves the key to a workspace (revocation
  *     + liveness checked by apiKeyService), enforces the Origin allowlist, and
  *     returns ONLY the public projection (never allowedDomains or aiInstructions).
@@ -29,12 +29,20 @@ const DB_URL = () => process.env.DATABASE_URL!;
 /** Full settings view (agent-facing). Mirrors the widget_settings row shape. */
 export interface WidgetSettingsView {
   color: string;
+  theme: 'dark' | 'light';
+  backgroundColor: string;
+  backgroundGradient: boolean;
+  backgroundGradientColor: string;
+  buttonColor: string;
+  agentBubbleColor: string;
   logoUrl: string | null;
   position: string;
   greeting: string | null;
   offlineMessage: string | null;
   prechatFields: unknown[];
+  prechatEnabled: boolean;
   workingHours: Record<string, unknown>;
+  quickReplies: string[];
   aiEnabled: boolean;
   aiInstructions: string | null;
   allowedDomains: string[];
@@ -44,25 +52,41 @@ export interface WidgetSettingsView {
 /** Public projection — everything the widget needs to render, nothing sensitive. */
 export interface PublicWidgetSettings {
   color: string;
+  theme: 'dark' | 'light';
+  backgroundColor: string;
+  backgroundGradient: boolean;
+  backgroundGradientColor: string;
+  buttonColor: string;
+  agentBubbleColor: string;
   logoUrl: string | null;
   position: string;
   greeting: string | null;
   offlineMessage: string | null;
   prechatFields: unknown[];
+  prechatEnabled: boolean;
   workingHours: Record<string, unknown>;
+  quickReplies: string[];
   aiEnabled: boolean;
   language: string;
 }
 
 /** Defaults applied when the workspace has no widget_settings row yet. */
 const DEFAULT_SETTINGS: WidgetSettingsView = {
-  color: '#4f46e5',
+  color: '#303033',
+  theme: 'dark',
+  backgroundColor: '#000000',
+  backgroundGradient: false,
+  backgroundGradientColor: '#19191d',
+  buttonColor: '#f4f4f5',
+  agentBubbleColor: '#1b1b1c',
   logoUrl: null,
   position: 'right',
   greeting: null,
   offlineMessage: null,
   prechatFields: [],
+  prechatEnabled: true,
   workingHours: {},
+  quickReplies: [],
   aiEnabled: false,
   aiInstructions: null,
   allowedDomains: [],
@@ -71,12 +95,20 @@ const DEFAULT_SETTINGS: WidgetSettingsView = {
 
 type SettingsRow = {
   color: string;
+  theme: string;
+  backgroundColor: string;
+  backgroundGradient: boolean;
+  backgroundGradientColor: string;
+  buttonColor: string;
+  agentBubbleColor: string;
   logoUrl: string | null;
   position: string;
   greeting: string | null;
   offlineMessage: string | null;
   prechatFields: unknown;
+  prechatEnabled: boolean;
   workingHours: unknown;
+  quickReplies: unknown;
   aiEnabled: boolean;
   aiInstructions: string | null;
   allowedDomains: string[];
@@ -86,12 +118,22 @@ type SettingsRow = {
 function toView(row: SettingsRow): WidgetSettingsView {
   return {
     color: row.color,
+    theme: row.theme === 'light' ? 'light' : 'dark',
+    backgroundColor: row.backgroundColor,
+    backgroundGradient: row.backgroundGradient,
+    backgroundGradientColor: row.backgroundGradientColor,
+    buttonColor: row.buttonColor,
+    agentBubbleColor: row.agentBubbleColor,
     logoUrl: row.logoUrl,
     position: row.position,
     greeting: row.greeting,
     offlineMessage: row.offlineMessage,
     prechatFields: (row.prechatFields as unknown[]) ?? [],
+    prechatEnabled: row.prechatEnabled,
     workingHours: (row.workingHours as Record<string, unknown>) ?? {},
+    quickReplies: Array.isArray(row.quickReplies)
+      ? row.quickReplies.filter((reply): reply is string => typeof reply === 'string')
+      : [],
     aiEnabled: row.aiEnabled,
     aiInstructions: row.aiInstructions,
     allowedDomains: row.allowedDomains,
@@ -156,7 +198,7 @@ export const widgetSettingsService = {
   },
 
   /**
-   * PUBLIC: widget bootstrap config for a pk_… key. Resolves + verifies the
+   * PUBLIC: widget bootstrap config for a qvse_… key. Resolves + verifies the
    * key (404 for unknown/revoked/forged), enforces the workspace's Origin
    * allowlist when configured (403), then returns the public projection.
    */
@@ -184,15 +226,35 @@ export const widgetSettingsService = {
 
       return {
         color: settings.color,
+        theme: settings.theme,
+        backgroundColor: settings.backgroundColor,
+        backgroundGradient: settings.backgroundGradient,
+        backgroundGradientColor: settings.backgroundGradientColor,
+        buttonColor: settings.buttonColor,
+        agentBubbleColor: settings.agentBubbleColor,
         logoUrl: settings.logoUrl,
         position: settings.position,
         greeting: settings.greeting,
         offlineMessage: settings.offlineMessage,
         prechatFields: settings.prechatFields,
+        prechatEnabled: settings.prechatEnabled,
         workingHours: settings.workingHours,
+        quickReplies: settings.quickReplies,
         aiEnabled: settings.aiEnabled,
         language: settings.language,
       };
     });
+  },
+  /**
+   * Generate a self-contained embeddable JS snippet for a public key.
+   */
+  embedScript(publicKey: string): string {
+    var safeKey = publicKey.replace(/[^a-zA-Z0-9_]/g, '');
+    var bundleUrl = process.env.WIDGET_BUNDLE_URL || '/widget/v1/bundle.js';
+    var js = '(function(){var d=document;var s=d.createElement(\'script\');';
+    js += 's.src=\'' + bundleUrl + '\';';
+    js += 's.dataset.publicKey=\'' + safeKey + '\';';
+    js += 's.async=true;d.head.appendChild(s);})();';
+    return js;
   },
 };

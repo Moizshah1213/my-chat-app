@@ -16,7 +16,7 @@ import { parse } from './validation.js';
 /**
  * ApiKeyService — widget public keys (blueprint §7.3).
  *
- * Key format: `pk_<workspaceId-hex>_<random>`.
+ * Key format: `qvse_<workspaceId-hex>_<random>`.
  *  - The workspaceId segment routes the key to its tenant BEFORE any RLS
  *    context exists (Intercom-style app_id), so the PUBLIC widget endpoints
  *    (visitor_init, settings fetch) can resolve a key without a token.
@@ -30,12 +30,12 @@ import { parse } from './validation.js';
 /** Mint a public key for a workspace (called inside that workspace's context). */
 export function generatePublicKey(workspaceId: string): string {
   const rand = randomBytes(18).toString('base64url'); // 144 bits
-  return `pk_${workspaceId.replace(/-/g, '')}_${rand}`;
+  return `qvse_${workspaceId.replace(/-/g, '')}_${rand}`;
 }
 
-const PUBLIC_KEY_RE = /^pk_([0-9a-f]{32})_[A-Za-z0-9_-]{10,}$/;
+const PUBLIC_KEY_RE = /^(?:qvse|pk)_([0-9a-f]{32})_[A-Za-z0-9_-]{10,}$/;
 
-/** Extract the workspace UUID embedded in a pk_… key, or null if malformed. */
+/** Extract the workspace UUID embedded in a widget key, or null if malformed. */
 export function workspaceIdFromPublicKey(publicKey: string): string | null {
   const m = PUBLIC_KEY_RE.exec(publicKey);
   if (!m?.[1]) return null;
@@ -78,7 +78,7 @@ export const apiKeyService = {
     });
   },
 
-  /** Mint a new widget key. The full pk_… string is returned ONCE here. */
+  /** Mint a new widget key. The full qvse_… string is returned ONCE here. */
   async create(workspaceId: string, role: Role, body: unknown): Promise<ApiKeyView> {
     assertCapability(role, 'apikeys:manage');
     const input = parse(createApiKeySchema, body);

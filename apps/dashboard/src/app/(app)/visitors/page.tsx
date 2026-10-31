@@ -48,7 +48,7 @@ export default function VisitorsPage() {
 
   return (
     <div className="page">
-      {error && <div className="alert error">{error}</div>}
+      {error && <div className="alert">{error}</div>}
       {loading && items.length === 0 && <div className="empty-state">Loading…</div>}
       {!loading && items.length === 0 && !error && (
         <div className="empty-state">No visitors yet — they appear after first widget chat.</div>

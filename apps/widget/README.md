@@ -1,7 +1,7 @@
 # @livechat/widget
 
 Embeddable live-chat widget — a single self-contained `dist/widget.js`
-(~58kb, Socket.IO bundled). Zero framework dependencies; renders inside a
+(~78kb, Socket.IO and the animated orb bundled). Zero framework dependencies; renders inside a
 **Shadow DOM** so host-page CSS can't leak in (and vice versa).
 
 ## Build
@@ -15,7 +15,7 @@ Serve `dist/widget.js` from your CDN (or the API host) and embed it:
 ```html
 <script
   src="https://cdn.example.com/widget.js"
-  data-public-key="pk_…"
+  data-public-key="qvse_…"
   data-api-url="https://api.example.com"
   async
 ></script>
@@ -37,9 +37,34 @@ LiveChat.off('message', handler);
 LiveChat.destroy();                 // full teardown (SPA route changes)
 ```
 
+## UI flow
+
+1. **Launcher** — round black button with a live jelly orb (unread badge on top).
+2. **Welcome screen** — orb + greeting, asks for **full name** and **email**
+   (uses `prechatFields` from settings when configured, otherwise name + email).
+3. **Two tabs** once the visitor is identified:
+   - **Live chat** — realtime chat over Socket.IO. Replies from a human agent
+     or from the AI assistant (`senderType: 'ai'`, shown with an "AI assistant" tag).
+     The orb reacts: listening while typing, thinking while waiting, happy on reply.
+   - **Send a query** — email + subject + message form → `POST /widget/v1/queries`.
+4. If the workspace is outside working hours and `aiEnabled` is false, the widget
+   opens on the **Send a query** tab and shows the offline notice.
+
+## Backend contract added by this UI
+
+```
+POST /widget/v1/queries
+{ publicKey, anonymousId, name?, email, subject?, message, page }   → 2xx on success
+
+GET /widget/v1/settings        (optional new field)
+{ …, quickReplies?: string[] }  → suggested first messages shown as chips
+
+message:new  → message.senderType may now be 'agent' | 'visitor' | 'ai'
+```
+
 ## Behavior
 
-- **Settings** — fetched once from `GET /widget/v1/settings?key=pk_…`; drives
+- **Settings** — fetched once from `GET /widget/v1/settings?key=qvse_…`; drives
   color, position, greeting, logo, language, pre-chat fields, offline message.
 - **Identity** — an anonymous id is persisted in `localStorage` so returning
   visitors resume their conversation; `identify()` restarts the session with

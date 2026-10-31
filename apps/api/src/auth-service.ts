@@ -1,11 +1,13 @@
-import { eq, and, isNull, gt, desc, ne } from 'drizzle-orm';
+import { eq, and, isNull, gt, desc, ne, lt, inArray, or } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import {
   users,
+  userAvatars,
   workspaces,
   memberships,
   refreshTokens,
   emailTokens,
+  qrLoginChallenges,
   type User,
 } from '@livechat/db';
 import { withoutTenant, currentTx, setTenantContext, setUserContext } from '@livechat/db';
@@ -14,18 +16,25 @@ import {
   conflict,
   invalidCredentials,
   badRequest,
+  forbidden,
   notFound,
   REFRESH_TOKEN_TTL_SECONDS,
   EMAIL_VERIFY_TTL_SECONDS,
   PASSWORD_RESET_TTL_SECONDS,
   MIN_PASSWORD_LENGTH,
+  type Role,
 } from '@livechat/shared';
 import { generateToken, generateUuid, hashToken, hashPassword, verifyPassword } from './crypto.js';
 import { signAccessToken, signTempToken, verifyTempToken } from './jwt.js';
 import { generateTotpSecret, totpUri, verifyTotp, storeTotpSecret, loadTotpSecret } from './totp.js';
+import type { GoogleIdentity } from './google-auth.js';
 
 const MAX_FAILED = 8;
 const LOCK_MINUTES = 15;
+
+function isMembershipRole(value: string): value is Role {
+  return value === 'owner' || value === 'admin' || value === 'agent';
+}
 
 /**
  * Run a small write in its OWN committed transaction (no tenant context).
@@ -51,9 +60,58 @@ function slugify(input: string): string {
 export interface SessionResult {
   accessToken: string;
   refreshToken: string;
-  user: Pick<User, 'id' | 'email' | 'name' | 'emailVerifiedAt' | 'totpEnabled'>;
+  twoFactorSkipped: boolean;
+  user: Pick<User, 'id' | 'email' | 'name' | 'phone' | 'avatarUrl' | 'emailVerifiedAt' | 'totpEnabled'>;
   workspaceId: string;
   role: string;
+}
+
+export interface SignupVerificationRequired {
+  requiresEmailVerification: true;
+  email: string;
+  workspaceId: string;
+  userId: string;
+}
+
+type SignupMethod = {
+  (input: { email: string; password: string; name: string; workspaceName: string }): Promise<SessionResult>;
+  (
+    input: { email: string; password: string; name: string; workspaceName: string },
+    requireEmailVerification: true,
+  ): Promise<SignupVerificationRequired>;
+};
+
+function verificationEmailContent(token: string) {
+  const appName = process.env.PRODUCT_NAME ?? 'Qonvilo';
+  const origin = (process.env.PUBLIC_APP_ORIGIN ?? 'http://localhost:3000').replace(/\/+$/, '');
+  const verifyUrl = new URL('/verify-email', origin);
+  verifyUrl.searchParams.set('token', token);
+  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[char]!);
+  const safeAppName = escapeHtml(appName);
+  const safeVerifyUrl = escapeHtml(verifyUrl.toString());
+  const expiryHours = Math.max(1, Math.round(EMAIL_VERIFY_TTL_SECONDS / 3600));
+
+  return {
+    subject: `Confirm your email for ${appName}`,
+    text: [
+      `Hello,`,
+      '',
+      `Thanks for creating a ${appName} account. Confirm that this email address belongs to you by opening the link below:`,
+      '',
+      verifyUrl.toString(),
+      '',
+      `This link expires in ${expiryHours} hours and can only be used once. If you did not create this account, you can ignore this email.`,
+      '',
+      `${appName} Support`,
+    ].join('\n'),
+    html: `<div style="margin:0;padding:36px 16px;background:#f5f5f6;font-family:Arial,Helvetica,sans-serif;color:#171719"><table role="presentation" style="width:100%;max-width:560px;margin:0 auto;border-collapse:collapse"><tr><td style="padding:28px;background:#fff;border:1px solid #e8e8eb;border-radius:16px"><p style="margin:0 0 24px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#68686f">${safeAppName}</p><h1 style="margin:0 0 14px;font-size:24px;line-height:1.3;color:#171719">Confirm your email</h1><p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#55555c">Thanks for creating an account. Confirm this email address to finish setting up your workspace.</p><p style="margin:0 0 24px"><a href="${safeVerifyUrl}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#171719;color:#fff;text-decoration:none;font-size:14px;font-weight:600">Confirm email address</a></p><p style="margin:0 0 10px;font-size:12px;line-height:1.6;color:#77777e">This link expires in ${expiryHours} hours and can only be used once.</p><p style="margin:0;font-size:12px;line-height:1.6;color:#77777e">If you did not create this account, you can safely ignore this email.</p></td></tr><tr><td style="padding:16px 8px;text-align:center;font-size:11px;color:#8a8a90">Sent by ${safeAppName}</td></tr></table></div>`,
+  };
 }
 
 /** One active login session (= the newest row of a refresh-token family). */
@@ -61,6 +119,7 @@ export interface SessionView {
   id: string; // family id
   ip: string | null;
   userAgent: string | null;
+  location: string | null;
   createdAt: Date;
   expiresAt: Date;
   current: boolean;
@@ -113,12 +172,134 @@ function generateRecoveryCode(): string {
  * created atomically; RLS is not yet relevant before a workspace context exists).
  */
 export const authService = {
-  async signup(input: {
+  async startQrLogin(pollToken: string, origin: string) {
+    const challengeToken = generateToken();
+    const expiresAt = new Date(Date.now() + 3 * 60_000);
+    await withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      await tx.delete(qrLoginChallenges).where(
+        lt(qrLoginChallenges.expiresAt, new Date(Date.now() - 24 * 60 * 60_000)),
+      );
+      await tx.insert(qrLoginChallenges).values({
+        challengeHash: hashToken(challengeToken),
+        pollTokenHash: hashToken(pollToken),
+        origin,
+        expiresAt,
+      });
+    });
+    return { challengeToken, expiresAt };
+  },
+
+  async inspectQrLogin(challengeToken: string) {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const [challenge] = await tx
+        .select({
+          origin: qrLoginChallenges.origin,
+          status: qrLoginChallenges.status,
+          expiresAt: qrLoginChallenges.expiresAt,
+        })
+        .from(qrLoginChallenges)
+        .where(eq(qrLoginChallenges.challengeHash, hashToken(challengeToken)))
+        .limit(1);
+      if (!challenge) throw notFound('QR sign-in request not found');
+      return {
+        origin: challenge.origin,
+        status: challenge.expiresAt.getTime() <= Date.now() ? 'expired' : challenge.status,
+        expiresAt: challenge.expiresAt,
+      };
+    });
+  },
+
+  async approveQrLogin(
+    challengeToken: string,
+    auth: { userId: string; workspaceId: string; role: string; sessionId?: string },
+  ) {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const now = new Date();
+      const [currentSession] = auth.sessionId
+        ? await tx
+            .select({ twoFactorSkipped: refreshTokens.twoFactorSkipped })
+            .from(refreshTokens)
+            .where(and(
+              eq(refreshTokens.userId, auth.userId),
+              eq(refreshTokens.familyId, auth.sessionId),
+              isNull(refreshTokens.revokedAt),
+              gt(refreshTokens.expiresAt, now),
+            ))
+            .limit(1)
+        : [];
+      const [approved] = await tx
+        .update(qrLoginChallenges)
+        .set({
+          status: 'approved',
+          approvedBy: auth.userId,
+          workspaceId: auth.workspaceId,
+          role: auth.role,
+          twoFactorSkipped: Boolean(currentSession?.twoFactorSkipped),
+        })
+        .where(and(
+          eq(qrLoginChallenges.challengeHash, hashToken(challengeToken)),
+          eq(qrLoginChallenges.status, 'pending'),
+          gt(qrLoginChallenges.expiresAt, now),
+        ))
+        .returning({ id: qrLoginChallenges.id });
+      if (!approved) throw conflict('QR sign-in request expired or was already approved');
+      return { ok: true as const };
+    });
+  },
+
+  async pollQrLogin(
+    challengeToken: string,
+    pollToken: string,
+    meta?: { ip?: string; userAgent?: string; location?: string },
+  ): Promise<{ status: 'pending' | 'expired' | 'consumed' } | { status: 'approved'; session: SessionResult }> {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const [challenge] = await tx
+        .select()
+        .from(qrLoginChallenges)
+        .where(and(
+          eq(qrLoginChallenges.challengeHash, hashToken(challengeToken)),
+          eq(qrLoginChallenges.pollTokenHash, hashToken(pollToken)),
+        ))
+        .limit(1);
+      if (!challenge) throw invalidCredentials('Invalid QR sign-in request');
+      if (challenge.expiresAt.getTime() <= Date.now()) return { status: 'expired' as const };
+      if (challenge.status === 'consumed') return { status: 'consumed' as const };
+      if (challenge.status !== 'approved') return { status: 'pending' as const };
+      if (!challenge.approvedBy || !challenge.workspaceId || !challenge.role) {
+        throw conflict('QR sign-in approval is incomplete');
+      }
+
+      const [consumed] = await tx
+        .update(qrLoginChallenges)
+        .set({ status: 'consumed' })
+        .where(and(
+          eq(qrLoginChallenges.id, challenge.id),
+          eq(qrLoginChallenges.status, 'approved'),
+          gt(qrLoginChallenges.expiresAt, new Date()),
+        ))
+        .returning({ id: qrLoginChallenges.id });
+      if (!consumed) return { status: 'consumed' as const };
+
+      const [user] = await tx.select().from(users).where(eq(users.id, challenge.approvedBy));
+      if (!user || !user.emailVerifiedAt) throw forbidden('Please verify your email before signing in.');
+      const session = await authService.issueSession(user, challenge.workspaceId, challenge.role, {
+        ...meta,
+        twoFactorSkipped: challenge.twoFactorSkipped,
+      });
+      return { status: 'approved' as const, session };
+    });
+  },
+
+  signup: (async (input: {
     email: string;
     password: string;
     name: string;
     workspaceName: string;
-  }): Promise<SessionResult> {
+  }, requireEmailVerification = false): Promise<SessionResult | SignupVerificationRequired> => {
     return withoutTenant(process.env.DATABASE_URL!, async () => {
       const tx = currentTx();
 
@@ -161,22 +342,30 @@ export const authService = {
       });
       await sendEmail({
         to: user.email,
-        subject: 'Verify your email',
-        text: `Verify your account with this code: ${verifyToken}`,
+        ...verificationEmailContent(verifyToken),
         devMarker: '[email:verify]',
         devToken: verifyToken,
       });
 
-      const session = await this.issueSession(user, ws.id, 'owner');
+      if (requireEmailVerification) {
+        return {
+          requiresEmailVerification: true,
+          email: user.email,
+          workspaceId: ws.id,
+          userId: user.id,
+        };
+      }
+
+      const session = await authService.issueSession(user, ws.id, 'owner');
       return session;
     });
-  },
+  }) as SignupMethod,
 
   async issueSession(
     user: User,
     workspaceId: string,
     role: string,
-    meta?: { ip?: string; userAgent?: string },
+    meta?: { ip?: string; userAgent?: string; location?: string; twoFactorSkipped?: boolean },
   ): Promise<SessionResult> {
     const refreshToken = generateToken();
     const familyId = generateUuid();
@@ -187,9 +376,11 @@ export const authService = {
       workspaceId,
       tokenHash: hashToken(refreshToken),
       familyId,
+      twoFactorSkipped: meta?.twoFactorSkipped ?? false,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
       ip: meta?.ip,
       userAgent: meta?.userAgent,
+      location: meta?.location,
     });
 
     const accessToken = signAccessToken({
@@ -197,15 +388,19 @@ export const authService = {
       workspaceId,
       role: role as 'owner',
       jti: generateToken(8),
+      sid: familyId,
     });
 
     return {
       accessToken,
       refreshToken,
+      twoFactorSkipped: meta?.twoFactorSkipped ?? false,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
         emailVerifiedAt: user.emailVerifiedAt,
         totpEnabled: user.totpEnabled,
       },
@@ -226,6 +421,7 @@ export const authService = {
     totpCode?: string;
     ip?: string;
     userAgent?: string;
+    location?: string;
   }): Promise<SessionResult | { requires2fa: true; tempToken: string }> {
     return withoutTenant(process.env.DATABASE_URL!, async () => {
       const tx = currentTx();
@@ -250,6 +446,10 @@ export const authService = {
             .where(eq(users.id, user.id));
         });
         throw invalidCredentials();
+      }
+
+      if (!user.emailVerifiedAt) {
+        throw forbidden('Please verify your email before signing in.');
       }
 
       if (user.totpEnabled && !input.totpCode) {
@@ -278,6 +478,91 @@ export const authService = {
       return this.issueSession(user, membership.workspaceId, membership.role, {
         ip: input.ip,
         userAgent: input.userAgent,
+        location: input.location,
+      });
+    });
+  },
+
+  async loginWithGoogle(input: GoogleIdentity & {
+    ip?: string;
+    userAgent?: string;
+    location?: string;
+  }): Promise<SessionResult | { requires2fa: true; tempToken: string }> {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      let [user] = await tx.select().from(users).where(eq(users.googleSubject, input.subject));
+
+      if (!user) {
+        [user] = await tx.select().from(users).where(eq(users.email, input.email));
+        if (user?.googleSubject && user.googleSubject !== input.subject) {
+          throw conflict('This email is already linked to another Google account.');
+        }
+      }
+
+      if (user) {
+        if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+          throw invalidCredentials('Account temporarily locked. Try again later.');
+        }
+        const [linkedUser] = await tx
+          .update(users)
+          .set({
+            googleSubject: input.subject,
+            emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+            name: user.name ?? input.name,
+          })
+          .where(eq(users.id, user.id))
+          .returning();
+        if (!linkedUser) throw invalidCredentials();
+        user = linkedUser;
+      } else {
+        const name = input.name || input.email.split('@')[0] || 'Qonvilo user';
+        const [createdUser] = await tx
+          .insert(users)
+          .values({
+            email: input.email,
+            googleSubject: input.subject,
+            passwordHash: await hashPassword(generateToken(32)),
+            emailVerifiedAt: new Date(),
+            name,
+          })
+          .returning();
+        if (!createdUser) throw conflict('Failed to create account');
+        user = createdUser;
+
+        const [workspace] = await tx
+          .insert(workspaces)
+          .values({ name: `${name}'s workspace`, slug: slugify(`${name}-workspace`) })
+          .returning();
+        if (!workspace) throw conflict('Failed to create workspace');
+
+        await setTenantContext(workspace.id);
+        await tx.insert(memberships).values({
+          workspaceId: workspace.id,
+          userId: user.id,
+          role: 'owner',
+        });
+      }
+
+      await setUserContext(user.id);
+      const [membership] = await tx
+        .select()
+        .from(memberships)
+        .where(eq(memberships.userId, user.id));
+      if (!membership) throw badRequest('User has no workspace');
+
+      if (user.totpEnabled) {
+        return { requires2fa: true as const, tempToken: signTempToken(user.id) };
+      }
+
+      await tx
+        .update(users)
+        .set({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() })
+        .where(eq(users.id, user.id));
+
+      return this.issueSession(user, membership.workspaceId, membership.role, {
+        ip: input.ip,
+        userAgent: input.userAgent,
+        location: input.location,
       });
     });
   },
@@ -293,6 +578,7 @@ export const authService = {
     code: string;
     ip?: string;
     userAgent?: string;
+    location?: string;
   }): Promise<SessionResult> {
     let sub: string;
     try {
@@ -306,6 +592,7 @@ export const authService = {
       // Deleted account, 2FA turned off in the meantime, or still locked
       // (tempToken was minted before the password check — re-check gates here).
       if (!user || !user.totpEnabled) throw invalidCredentials();
+      if (!user.emailVerifiedAt) throw forbidden('Please verify your email before signing in.');
       if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
         throw invalidCredentials('Account temporarily locked. Try again later.');
       }
@@ -328,6 +615,7 @@ export const authService = {
       return this.issueSession(user, membership.workspaceId, membership.role, {
         ip: input.ip,
         userAgent: input.userAgent,
+        location: input.location,
       });
     });
   },
@@ -365,6 +653,7 @@ export const authService = {
 
       const [user] = await tx.select().from(users).where(eq(users.id, stored.userId));
       if (!user) throw invalidCredentials();
+      if (!user.emailVerifiedAt) throw forbidden('Please verify your email before signing in.');
 
       // Rotate: revoke old, insert new in same family.
       const newToken = generateToken();
@@ -377,38 +666,121 @@ export const authService = {
         workspaceId: stored.workspaceId,
         tokenHash: hashToken(newToken),
         familyId: stored.familyId,
+        twoFactorSkipped: stored.twoFactorSkipped,
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
         ip: stored.ip,
         userAgent: stored.userAgent,
+        location: stored.location,
       });
 
       // Allow reading this user's OWN memberships (RLS self policy).
       await setUserContext(user.id);
-      const [membership] = await tx
+      const availableMemberships = await tx
         .select()
         .from(memberships)
         .where(eq(memberships.userId, user.id));
-      const wsId = stored.workspaceId ?? membership!.workspaceId;
-      const role = membership?.role ?? 'agent';
+      const membership = stored.workspaceId
+        ? availableMemberships.find((entry) => entry.workspaceId === stored.workspaceId)
+        : availableMemberships.length === 1 ? availableMemberships[0] : undefined;
+      if (!membership || !isMembershipRole(membership.role)) {
+        throw invalidCredentials('Session workspace membership no longer exists');
+      }
+      const wsId = membership.workspaceId;
+      const role = membership.role;
 
       const accessToken = signAccessToken({
         sub: user.id,
         workspaceId: wsId,
         role: role as 'owner',
         jti: generateToken(8),
+        sid: stored.familyId,
       });
 
       return {
         accessToken,
         refreshToken: newToken,
+        twoFactorSkipped: stored.twoFactorSkipped,
         user: {
           id: user.id,
           email: user.email,
           name: user.name,
+          phone: user.phone,
+          avatarUrl: user.avatarUrl,
           emailVerifiedAt: user.emailVerifiedAt,
           totpEnabled: user.totpEnabled,
         },
         workspaceId: wsId,
+        role,
+      };
+    });
+  },
+
+  async skipTwoFactorForSession(
+    userId: string,
+    sessionId: string,
+  ): Promise<Omit<SessionResult, 'refreshToken'>> {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const [stored] = await tx
+        .select()
+        .from(refreshTokens)
+        .where(and(
+          eq(refreshTokens.userId, userId),
+          eq(refreshTokens.familyId, sessionId),
+          isNull(refreshTokens.revokedAt),
+          gt(refreshTokens.expiresAt, new Date()),
+        ))
+        .limit(1);
+      if (
+        !stored ||
+        stored.userId !== userId ||
+        stored.revokedAt ||
+        stored.expiresAt.getTime() < Date.now()
+      ) {
+        throw invalidCredentials('Invalid session');
+      }
+
+      const [user] = await tx.select().from(users).where(eq(users.id, userId));
+      if (!user || !user.emailVerifiedAt) throw forbidden('Please verify your email before signing in.');
+      if (user.totpEnabled) throw badRequest('Two-factor authentication is already enabled');
+
+      await tx
+        .update(refreshTokens)
+        .set({ twoFactorSkipped: true })
+        .where(and(eq(refreshTokens.familyId, stored.familyId), isNull(refreshTokens.revokedAt)));
+
+      await setUserContext(user.id);
+      const availableMemberships = await tx
+        .select()
+        .from(memberships)
+        .where(eq(memberships.userId, user.id));
+      const membership = stored.workspaceId
+        ? availableMemberships.find((entry) => entry.workspaceId === stored.workspaceId)
+        : availableMemberships.length === 1 ? availableMemberships[0] : undefined;
+      if (!membership || !isMembershipRole(membership.role)) {
+        throw invalidCredentials('Session workspace membership no longer exists');
+      }
+      const workspaceId = membership.workspaceId;
+      const role = membership.role;
+      return {
+        accessToken: signAccessToken({
+          sub: user.id,
+          workspaceId,
+          role: role as 'owner',
+          jti: generateToken(8),
+          sid: stored.familyId,
+        }),
+        twoFactorSkipped: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          avatarUrl: user.avatarUrl,
+          emailVerifiedAt: user.emailVerifiedAt,
+          totpEnabled: user.totpEnabled,
+        },
+        workspaceId,
         role,
       };
     });
@@ -447,17 +819,209 @@ export const authService = {
         .where(
           and(
             eq(emailTokens.tokenHash, hash),
-            eq(emailTokens.type, 'verify'),
-            isNull(emailTokens.usedAt),
-            gt(emailTokens.expiresAt, new Date()),
+            inArray(emailTokens.type, ['verify', 'email_change']),
           ),
         );
       if (!row) throw badRequest('Invalid or expired verification token');
+      if (row.usedAt && row.type === 'verify') {
+        const [user] = await tx.select().from(users).where(eq(users.id, row.userId));
+        if (user?.emailVerifiedAt) return;
+        throw badRequest('Invalid or expired verification token');
+      }
+      if (row.usedAt) throw badRequest('Invalid or expired verification token');
+      if (row.expiresAt.getTime() <= Date.now()) {
+        throw badRequest('Invalid or expired verification token');
+      }
       await tx.update(emailTokens).set({ usedAt: new Date() }).where(eq(emailTokens.id, row.id));
-      await tx
+      if (row.type === 'email_change') {
+        const [user] = await tx.select().from(users).where(eq(users.id, row.userId));
+        if (!user?.pendingEmail) throw badRequest('This email change is no longer pending');
+        await tx.update(users)
+          .set({ email: user.pendingEmail, pendingEmail: null, emailVerifiedAt: new Date() })
+          .where(eq(users.id, row.userId));
+      } else {
+        await tx.update(users)
+          .set({ emailVerifiedAt: new Date() })
+          .where(eq(users.id, row.userId));
+      }
+    });
+  },
+
+  async getProfile(userId: string) {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const [user] = await currentTx()
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          phone: users.phone,
+          avatarUrl: users.avatarUrl,
+          pendingEmail: users.pendingEmail,
+          emailVerifiedAt: users.emailVerifiedAt,
+        })
+        .from(users)
+        .where(eq(users.id, userId));
+      if (!user) throw notFound('User not found');
+      return user;
+    });
+  },
+
+  async updateProfile(
+    userId: string,
+    input: { name: string; phone: string | null },
+  ) {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const [user] = await currentTx()
         .update(users)
-        .set({ emailVerifiedAt: new Date() })
-        .where(eq(users.id, row.userId));
+        .set(input)
+        .where(eq(users.id, userId))
+        .returning({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          phone: users.phone,
+          avatarUrl: users.avatarUrl,
+          pendingEmail: users.pendingEmail,
+          emailVerifiedAt: users.emailVerifiedAt,
+        });
+      if (!user) throw notFound('User not found');
+      return user;
+    });
+  },
+
+  async uploadAvatar(
+    userId: string,
+    input: { mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; imageData: string },
+  ) {
+    const data = Buffer.from(input.imageData, 'base64');
+    if (data.length === 0 || data.length > 1_000_000 || data.toString('base64') !== input.imageData) {
+      throw badRequest('Profile photo must be a valid image under 1 MB');
+    }
+    const isJpeg = input.mimeType === 'image/jpeg' && data.length >= 3
+      && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
+    const isPng = input.mimeType === 'image/png'
+      && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const isWebp = input.mimeType === 'image/webp' && data.length >= 12
+      && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP';
+    if (!isJpeg && !isPng && !isWebp) throw badRequest('The selected file is not a valid supported image');
+    const avatarUrl = `/v1/auth/avatar/${userId}?v=${generateUuid()}`;
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const [user] = await tx.update(users)
+        .set({ avatarUrl })
+        .where(eq(users.id, userId))
+        .returning({ id: users.id });
+      if (!user) throw notFound('User not found');
+      await tx.insert(userAvatars).values({
+        userId,
+        mimeType: input.mimeType,
+        imageData: input.imageData,
+        updatedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: userAvatars.userId,
+        set: { mimeType: input.mimeType, imageData: input.imageData, updatedAt: new Date() },
+      });
+      return { avatarUrl };
+    });
+  },
+
+  async getAvatar(userId: string) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+      throw notFound('Profile photo not found');
+    }
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const [avatar] = await currentTx()
+        .select({ mimeType: userAvatars.mimeType, imageData: userAvatars.imageData })
+        .from(userAvatars)
+        .where(eq(userAvatars.userId, userId));
+      if (!avatar) throw notFound('Profile photo not found');
+      return { mimeType: avatar.mimeType, data: Buffer.from(avatar.imageData, 'base64') };
+    });
+  },
+
+  async deleteAvatar(userId: string) {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      await tx.delete(userAvatars).where(eq(userAvatars.userId, userId));
+      const [user] = await tx.update(users)
+        .set({ avatarUrl: null })
+        .where(eq(users.id, userId))
+        .returning({ id: users.id });
+      if (!user) throw notFound('User not found');
+      return { avatarUrl: null };
+    });
+  },
+
+  async requestEmailChange(userId: string, email: string, password: string): Promise<void> {
+    return withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const [user] = await tx.select().from(users).where(eq(users.id, userId));
+      if (!user) throw notFound('User not found');
+      if (!(await verifyPassword(user.passwordHash, password))) throw invalidCredentials();
+      if (user.email.toLowerCase() === email.toLowerCase()) {
+        throw badRequest('This is already your email address');
+      }
+
+      const [existing] = await tx.select({ id: users.id }).from(users).where(or(
+        eq(users.email, email),
+        eq(users.pendingEmail, email),
+      )).limit(1);
+      if (existing && existing.id !== userId) throw conflict('Email already in use');
+
+      await tx.update(emailTokens)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(emailTokens.userId, userId),
+          eq(emailTokens.type, 'email_change'),
+          isNull(emailTokens.usedAt),
+        ));
+      const token = generateToken();
+      await tx.update(users).set({ pendingEmail: email }).where(eq(users.id, userId));
+      await tx.insert(emailTokens).values({
+        userId,
+        type: 'email_change',
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + EMAIL_VERIFY_TTL_SECONDS * 1000),
+      });
+      const origin = (process.env.PUBLIC_APP_ORIGIN ?? 'http://localhost:3000').replace(/\/+$/, '');
+      const verifyUrl = new URL('/verify-email', origin);
+      verifyUrl.searchParams.set('token', token);
+      await sendEmail({
+        to: email,
+        subject: 'Confirm your new Qonvilo email',
+        text: `Confirm your new email address by opening this link: ${verifyUrl.toString()}\n\nIf you did not request this change, you can ignore this email.`,
+        html: `<p>Confirm your new Qonvilo email address:</p><p><a href="${verifyUrl.toString()}">Confirm email</a></p><p>If you did not request this change, you can ignore this email.</p>`,
+        devMarker: '[email:change]',
+        devToken: token,
+      });
+    });
+  },
+
+  async changePassword(
+    userId: string,
+    currentFamilyId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw badRequest(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    }
+    await withoutTenant(process.env.DATABASE_URL!, async () => {
+      const tx = currentTx();
+      const [user] = await tx.select().from(users).where(eq(users.id, userId));
+      if (!user) throw notFound('User not found');
+      if (!(await verifyPassword(user.passwordHash, currentPassword))) throw invalidCredentials();
+      const passwordHash = await hashPassword(newPassword);
+      await tx.update(users)
+        .set({ passwordHash, failedLogins: 0, lockedUntil: null })
+        .where(eq(users.id, userId));
+      await tx.update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(
+          eq(refreshTokens.userId, userId),
+          ne(refreshTokens.familyId, currentFamilyId),
+          isNull(refreshTokens.revokedAt),
+        ));
     });
   },
 
@@ -486,19 +1050,28 @@ export const authService = {
       });
       await sendEmail({
         to: user.email,
-        subject: 'Verify your email',
-        text: `Verify your account with this code: ${token}`,
+        ...verificationEmailContent(token),
         devMarker: '[email:verify]',
         devToken: token,
       });
     });
   },
 
-  async forgotPassword(email: string): Promise<void> {
+  async forgotPassword(email: string): Promise<boolean> {
     return withoutTenant(process.env.DATABASE_URL!, async () => {
       const tx = currentTx();
       const [user] = await tx.select().from(users).where(eq(users.email, email));
-      if (!user) return; // no enumeration
+      if (!user) return false;
+      await tx
+        .update(emailTokens)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(emailTokens.userId, user.id),
+            eq(emailTokens.type, 'reset'),
+            isNull(emailTokens.usedAt),
+          ),
+        );
       const token = generateToken();
       await tx.insert(emailTokens).values({
         userId: user.id,
@@ -509,10 +1082,12 @@ export const authService = {
       await sendEmail({
         to: user.email,
         subject: 'Reset your password',
-        text: `Reset your password with this code: ${token}`,
+        text: `Reset your password using this secure link: ${(process.env.PUBLIC_APP_ORIGIN ?? 'http://localhost:3000').replace(/\/+$/, '')}/reset-password/${encodeURIComponent(token)}`,
+        html: `<p>We received a request to reset your password.</p><p><a href="${(process.env.PUBLIC_APP_ORIGIN ?? 'http://localhost:3000').replace(/\/+$/, '')}/reset-password/${encodeURIComponent(token)}">Reset password</a></p><p>This link expires in 30 minutes and can only be used once. If you did not request this, you can ignore this email.</p>`,
         devMarker: '[email:reset]',
         devToken: token,
       });
+      return true;
     });
   },
 
@@ -536,6 +1111,16 @@ export const authService = {
         throw badRequest(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
 
       await tx.update(emailTokens).set({ usedAt: new Date() }).where(eq(emailTokens.id, row.id));
+      await tx
+        .update(emailTokens)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(emailTokens.userId, row.userId),
+            eq(emailTokens.type, 'reset'),
+            isNull(emailTokens.usedAt),
+          ),
+        );
       const passwordHash = await hashPassword(newPassword);
       await tx
         .update(users)
@@ -609,7 +1194,11 @@ export const authService = {
   // ---- Session management (blueprint §7.1 "log out everywhere") ---------------
 
   /** Active login sessions — one entry per refresh-token family. */
-  async listSessions(userId: string, currentToken?: string): Promise<SessionView[]> {
+  async listSessions(
+    userId: string,
+    currentToken?: string,
+    currentFamilyId?: string,
+  ): Promise<SessionView[]> {
     return withoutTenant(process.env.DATABASE_URL!, async () => {
       const tx = currentTx();
       const rows = await tx
@@ -632,9 +1221,12 @@ export const authService = {
           id: r.familyId,
           ip: r.ip,
           userAgent: r.userAgent,
+          location: r.location,
           createdAt: r.createdAt,
           expiresAt: r.expiresAt,
-          current: currentHash !== null && r.tokenHash === currentHash,
+          current:
+            (currentHash !== null && r.tokenHash === currentHash) ||
+            (currentFamilyId !== undefined && r.familyId === currentFamilyId),
         });
       }
       return [...byFamily.values()];
@@ -665,10 +1257,11 @@ export const authService = {
   async revokeOtherSessions(
     userId: string,
     currentToken?: string,
+    currentFamilyId?: string,
   ): Promise<{ revoked: number }> {
     return withoutTenant(process.env.DATABASE_URL!, async () => {
       const tx = currentTx();
-      const keepHash = currentToken ? hashToken(currentToken) : null;
+      const keepHash = !currentFamilyId && currentToken ? hashToken(currentToken) : null;
       const revoked = await tx
         .update(refreshTokens)
         .set({ revokedAt: new Date() })
@@ -676,7 +1269,9 @@ export const authService = {
           and(
             eq(refreshTokens.userId, userId),
             isNull(refreshTokens.revokedAt),
-            keepHash ? ne(refreshTokens.tokenHash, keepHash) : undefined,
+            currentFamilyId
+              ? ne(refreshTokens.familyId, currentFamilyId)
+              : keepHash ? ne(refreshTokens.tokenHash, keepHash) : undefined,
           ),
         )
         .returning({ id: refreshTokens.id });

@@ -142,6 +142,7 @@ export const widgetService = {
             eq(conversations.workspaceId, workspaceId),
             eq(conversations.visitorId, visitor.id),
             eq(conversations.status, 'open'),
+            isNull(conversations.deletedAt),
           ),
         )
         .orderBy(desc(conversations.createdAt))

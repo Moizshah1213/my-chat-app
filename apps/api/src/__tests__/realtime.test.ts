@@ -41,6 +41,7 @@ interface Account {
   userId: string;
 }
 let owner: Account;
+let ownerPublicKey = '';
 const createdEmails: string[] = [];
 
 interface VisitorCtx {
@@ -132,10 +133,10 @@ async function signup(label: string): Promise<Account> {
   };
 }
 
-async function widgetInit(anonymousId: string, workspaceId?: string): Promise<VisitorCtx> {
+async function widgetInit(anonymousId: string, publicKey = ownerPublicKey): Promise<VisitorCtx> {
   const res = await request('/widget/v1/visitor_init', {
     method: 'POST',
-    body: JSON.stringify({ workspaceId: workspaceId ?? owner.workspaceId, anonymousId }),
+    body: JSON.stringify({ publicKey, anonymousId }),
   });
   assert.equal(res.status, 200, `visitor_init should succeed: ${JSON.stringify(res.json)}`);
   return {
@@ -237,6 +238,9 @@ before(async () => {
   base = `http://127.0.0.1:${addr.port}`;
 
   owner = await signup('realtime-owner');
+  const ownerWidgetKey = await post('/v1/api-keys', { name: 'Realtime tests' }, owner.accessToken);
+  assert.equal(ownerWidgetKey.status, 201, `test widget key created: ${JSON.stringify(ownerWidgetKey.json)}`);
+  ownerPublicKey = ownerWidgetKey.json.publicKey;
 
   // Primary visitor: widget_init resolves or creates the visitor and opens a
   // conversation for them (v1.conversationId == baseline).
@@ -505,7 +509,9 @@ describe('realtime: cross-tenant + ownership', () => {
     // Guest owner + guest visitor live in their own workspace (separate tenant).
     const guestOwner = await signup('rea-guest-2');
     guestWorkspaces.push(guestOwner.workspaceId);
-    const guestVis = await widgetInit('rea-guest-2-anon', guestOwner.workspaceId);
+    const guestKey = await post('/v1/api-keys', { name: 'Guest realtime tests' }, guestOwner.accessToken);
+    assert.equal(guestKey.status, 201);
+    const guestVis = await widgetInit('rea-guest-2-anon', guestKey.json.publicKey);
 
     const guestSock = await connectSocket(guestVis.token);
 

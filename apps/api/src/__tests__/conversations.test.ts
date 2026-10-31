@@ -43,6 +43,7 @@ interface Account {
   userId: string;
 }
 let owner: Account;
+let ownerPublicKey = '';
 const createdEmails: string[] = [];
 
 // Seed fixtures (created in before(), removed in after()).
@@ -135,7 +136,7 @@ async function signup(label: string): Promise<Account> {
 function widgetInit(anonymousId: string, origin?: string): Promise<HttpResult> {
   return request('/widget/v1/visitor_init', {
     method: 'POST',
-    body: JSON.stringify({ workspaceId: owner.workspaceId, anonymousId }),
+    body: JSON.stringify({ publicKey: ownerPublicKey, anonymousId }),
     ...(origin ? { headers: { origin } } : {}),
   });
 }
@@ -151,6 +152,9 @@ before(async () => {
   base = `http://127.0.0.1:${addr.port}`;
 
   owner = await signup('conv-owner');
+  const widgetKey = await post('/v1/api-keys', { name: 'Conversation tests' }, owner.accessToken);
+  assert.equal(widgetKey.status, 201, `test widget key created: ${JSON.stringify(widgetKey.json)}`);
+  ownerPublicKey = widgetKey.json.publicKey;
 
   // --- Seed fixtures -------------------------------------------------------
   visitorId = randomUUID();
@@ -557,6 +561,12 @@ describe('widget: origin allowlist + token audience separation', () => {
     const denied = await widgetInit(`allow-${uniq()}`, 'https://evil.example.net');
     assert.equal(denied.status, 403, `foreign origin refused: ${JSON.stringify(denied.json)}`);
     assert.equal(denied.json.error.code, 'forbidden');
+
+    const missingOrigin = await post('/widget/v1/visitor_init', {
+      publicKey: ownerPublicKey,
+      anonymousId: `allow-no-origin-${uniq()}`,
+    });
+    assert.equal(missingOrigin.status, 403, 'missing origin is refused when restrictions are configured');
 
     const exact = await widgetInit(`allow-${uniq()}`, 'https://shop.example.com');
     assert.equal(exact.status, 200, JSON.stringify(exact.json));

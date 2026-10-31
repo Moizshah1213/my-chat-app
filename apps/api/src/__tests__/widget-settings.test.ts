@@ -383,7 +383,7 @@ describe('widget settings: public fetch by widget key', () => {
     );
     assert.equal(set.status, 200, JSON.stringify(set.json));
 
-    const pub = await settingsFetch(publicKey);
+    const pub = await settingsFetch(publicKey, 'https://shop.example.com');
     assert.equal(pub.status, 200, JSON.stringify(pub.json));
     assert.equal(pub.json.color, '#123456');
     assert.equal(pub.json.theme, 'light');
@@ -406,7 +406,7 @@ describe('widget settings: public fetch by widget key', () => {
     assert.equal('aiInstructions' in pub.json, false);
   });
 
-  it('enforces the Origin allowlist (exact + wildcard); missing Origin bypasses', async () => {
+  it('enforces the Origin allowlist (exact + wildcard) and rejects missing Origin', async () => {
     const denied = await settingsFetch(publicKey, 'https://evil.example.net');
     assert.equal(denied.status, 403, `foreign origin refused: ${JSON.stringify(denied.json)}`);
     assert.equal(denied.json.error.code, 'forbidden');
@@ -418,7 +418,7 @@ describe('widget settings: public fetch by widget key', () => {
     assert.equal(wild.status, 200, 'subdomain wildcard matches');
 
     const noOrigin = await settingsFetch(publicKey);
-    assert.equal(noOrigin.status, 200, 'server-side fetch without Origin bypasses the check');
+    assert.equal(noOrigin.status, 403, 'missing Origin cannot bypass the configured allowlist');
 
     const badOrigin = await settingsFetch(publicKey, 'not-a-url');
     assert.equal(badOrigin.status, 403, 'unparseable Origin refused');
@@ -463,14 +463,21 @@ describe('widget: visitor_init by public key', () => {
     assert.ok(res.json.conversationId, 'opens a conversation');
   });
 
-  it('requires exactly one of workspaceId / publicKey', async () => {
-    const both = await post('/widget/v1/visitor_init', {
+  it('requires a public key and rejects workspaceId-based initialization', async () => {
+    const workspaceOnly = await post('/widget/v1/visitor_init', {
+      workspaceId: owner.workspaceId,
+      anonymousId: `vk-workspace-only-${uniq()}`,
+    });
+    assert.equal(workspaceOnly.status, 400, 'workspaceId cannot authorize public init');
+    assert.equal(workspaceOnly.json.error.code, 'validation_failed');
+
+    const keyAndWorkspace = await post('/widget/v1/visitor_init', {
       publicKey,
       workspaceId: owner.workspaceId,
-      anonymousId: `vk-both-${uniq()}`,
+      anonymousId: `vk-key-and-workspace-${uniq()}`,
     });
-    assert.equal(both.status, 400, 'both provided is ambiguous');
-    assert.equal(both.json.error.code, 'validation_failed');
+    assert.equal(keyAndWorkspace.status, 400, 'workspaceId is never accepted from the public init body');
+    assert.equal(keyAndWorkspace.json.error.code, 'validation_failed');
 
     const neither = await post('/widget/v1/visitor_init', {
       anonymousId: `vk-neither-${uniq()}`,

@@ -105,8 +105,7 @@ export const updateRoleSchema = strict({ role: z.enum(ROLES) });
  * hashes IPs, never stores raw IPs/user agents for visitors (blueprint §5).
  */
 export const visitorInitSchema = strict({
-  workspaceId: z.string().uuid().optional(),
-  publicKey: z.string().min(8).max(64).optional(),
+  publicKey: z.string().min(8).max(64),
   anonymousId: z.string().min(8).max(64),
   name: z.string().min(1).max(120).optional(),
   email: emailSchema.optional(),
@@ -120,8 +119,6 @@ export const visitorInitSchema = strict({
     )
     .refine((v) => Object.keys(v).length <= 50, { message: 'Too many attributes (max 50)' })
     .optional(),
-}).refine((v) => Boolean(v.workspaceId) !== Boolean(v.publicKey), {
-  message: 'Provide exactly one of workspaceId or publicKey',
 });
 
 /** Conversation list query (agent inbox). Non-strict: query strings may carry

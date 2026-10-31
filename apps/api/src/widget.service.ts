@@ -16,8 +16,7 @@ const INIT_HISTORY_LIMIT = 50;
 /**
  * WidgetService — the PUBLIC visitor-facing flow (blueprint §7/§9, step 2):
  *   POST /widget/v1/visitor_init
- *     1. resolve/validate the workspace (workspaceId or widget public key)
- *        + enforce the domain allowlist,
+ *     1. resolve a live widget public key + enforce the domain allowlist,
  *     2. find-or-create the visitor (stable anonymousId from the widget),
  *     3. resume the visitor's open conversation or open a new one,
  *     4. mint a short-lived visitor JWT for the WebSocket handshake.
@@ -58,11 +57,9 @@ export const widgetService = {
   ): Promise<VisitorInitResult> {
     const input: VisitorInitInput = parse(visitorInitSchema, body);
 
-    // Resolve the workspace: either the caller passed workspaceId directly
-    // (tests/legacy), or a widget public key — resolved + verified (live, not
-    // revoked) via apiKeyService, which also stamps last_used_at.
-    const workspaceId =
-      input.workspaceId ?? (await apiKeyService.resolveWorkspaceByPublicKey(input.publicKey!));
+    // Public initialization always goes through a live key so revocation and
+    // workspace ownership are checked before any visitor data is written.
+    const workspaceId = await apiKeyService.resolveWorkspaceByPublicKey(input.publicKey);
 
     return withTenant(DB_URL(), workspaceId, async () => {
       const tx = currentTx();
@@ -83,7 +80,8 @@ export const widgetService = {
         .from(widgetSettings)
         .where(eq(widgetSettings.workspaceId, workspaceId));
       const allowed = settings?.allowedDomains ?? [];
-      if (allowed.length > 0 && meta.origin) {
+      if (allowed.length > 0) {
+        if (!meta.origin) throw forbidden('Origin not allowed');
         let host = '';
         try {
           host = new URL(meta.origin).hostname;

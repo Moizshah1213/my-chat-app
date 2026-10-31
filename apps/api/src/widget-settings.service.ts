@@ -212,7 +212,8 @@ export const widgetSettingsService = {
         .where(eq(widgetSettings.workspaceId, workspaceId));
       const settings = row ? toView(row) : DEFAULT_SETTINGS;
 
-      if (settings.allowedDomains.length > 0 && origin) {
+      if (settings.allowedDomains.length > 0) {
+        if (!origin) throw forbidden('Origin not allowed');
         let host = '';
         try {
           host = new URL(origin).hostname;
